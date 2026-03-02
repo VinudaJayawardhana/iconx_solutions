@@ -1,0 +1,182 @@
+/* Global styles */
+body {
+    margin: 0;
+    font-family: "Inter", "Segoe UI", sans-serif;
+    background: #f9fafb;
+    color: #111827;
+  }
+  
+  /* Container */
+  .home-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  
+  /* Hero Section */
+  .hero {
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    color: white;
+    text-align: center;
+    padding: 80px 20px;
+  }
+  
+  .hero h1 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+  }
+  
+  .hero p {
+    font-size: 1.25rem;
+    margin-bottom: 30px;
+  }
+  
+  .btn-primary {
+    background: white;
+    color: #2563eb;
+    border: none;
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-primary:hover {
+    background: #2563eb;
+    color: white;
+    transform: scale(1.05);
+  }
+  
+  /* Products Section */
+  .products {
+    padding: 60px 20px;
+    text-align: center;
+  }
+  
+  .products h2 {
+    font-size: 2rem;
+    margin-bottom: 40px;
+  }
+  
+  .product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 30px;
+  }
+  
+  .product-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    padding: 20px;
+    transition: transform 0.3s ease;
+  }
+  
+  .product-card:hover {
+    transform: translateY(-8px);
+  }
+  
+  .product-card h3 {
+    font-size: 1.25rem;
+    margin-bottom: 10px;
+  }
+  
+  .product-card p {
+    font-size: 0.95rem;
+    margin-bottom: 15px;
+  }
+  
+  .product-card button {
+    margin: 5px;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.3s ease;
+  }
+  
+  .product-card button:first-of-type {
+    background: #e5e7eb;
+    color: #374151;
+  }
+  
+  .product-card button:last-of-type {
+    background: #2563eb;
+    color: white;
+  }
+  
+  .product-card button:last-of-type:hover {
+    background: #1e40af;
+  }
+  
+  /* Services Section */
+  .services {
+    background: #f3f4f6;
+    padding: 60px 20px;
+    text-align: center;
+  }
+  
+  .services h2 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+  }
+  
+  .services p {
+    max-width: 700px;
+    margin: 0 auto;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  
+  /* Trade-In Section */
+  .trade-in {
+    padding: 60px 20px;
+    text-align: center;
+  }
+  
+  .trade-in h2 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+  }
+  
+  .trade-in p {
+    font-size: 1rem;
+    margin-bottom: 15px;
+  }
+  
+  .trade-in button {
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.2s ease;
+  }
+  
+  .trade-in button:hover {
+    background: #059669;
+    transform: scale(1.05);
+  }
+  
+  /* Responsive tweaks */
+  @media (max-width: 768px) {
+    .hero h1 {
+      font-size: 2.2rem;
+    }
+  
+    .hero p {
+      font-size: 1rem;
+    }
+  
+    .products h2,
+    .services h2,
+    .trade-in h2 {
+      font-size: 1.6rem;
+    }
+  }
