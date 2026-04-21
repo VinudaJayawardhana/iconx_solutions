@@ -2,52 +2,342 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #ffffff;
-  padding: 12px 32px;
-  border-bottom: 1px solid #eaeaea;
+  padding: 16px 40px;
+  width: 100%;
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: none;
+  z-index: 1000;
+  background: #ffffff;
+  border-bottom: 1px solid #e8e8e8;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.04);
   font-family: "Segoe UI", Arial, sans-serif;
+  transition:
+    transform 0.28s ease,
+    opacity 0.28s ease,
+    box-shadow 0.28s ease;
+  will-change: transform, opacity;
+}
+
+.header-visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.header-hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .logo {
-  font-size: 1.6rem;
-  font-weight: bold;
-  color: #111;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.logo a {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.logo img {
+  height: 80px;
+  width: auto;
+  object-fit: contain;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.logo:hover img {
+  transform: scale(1.04);
+  opacity: 0.92;
 }
 
 .nav ul {
   display: flex;
-  gap: 28px;
+  gap: 30px;
   list-style: none;
   margin: 0;
   padding: 0;
+  align-items: center;
+}
+
+.nav ul li {
+  position: relative;
 }
 
 .nav ul li a {
+  position: relative;
   text-decoration: none;
   font-size: 1rem;
   font-weight: 500;
   color: #333;
   transition: color 0.3s ease;
+  display: inline-block;
+  height: 100%;
+  padding: 6px 2px;
 }
 
 .nav ul li a:hover {
-  color: #007bff;
+  color: #0065d0;
+  transform: translateY(-3px) scale(1.03);
+  transition: color 0.3s ease, transform 0.5s ease;
 }
 
-/* Right side (Sign in button) */
+.nav ul li a::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 0;
+  height: 4px;
+  background: #0065d0;
+  border-radius: 999px 999px 12px 12px;
+  transform: translateX(-50%);
+  transition: width 0.3s ease;
+}
+
+.nav ul li a:hover::after,
+.nav ul li a:focus::after {
+  width: 100%;
+}
+
 .signin-btn {
-  background-color: #007bff;
+  background-color: #0065d0;
   border: none;
   color: #fff;
-  padding: 8px 18px;
-  border-radius: 6px;
+  padding: 10px 20px;
+  border-radius: 999px;
   font-size: 0.95rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.3s ease, transform 0.3s ease;
 }
 
 .signin-btn:hover {
   background-color: #0056b3;
+  transform: translateY(-1px);
+}
+
+@keyframes dropdownFade {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.header-icons {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.header-icon-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.header-cart-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-cart-badge {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #007aff;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 14px rgba(0, 122, 255, 0.28);
+}
+
+.icon {
+  font-size: 20px;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.icon:hover {
+  color: #0056b3;
+  transform: translateY(-2px) scale(1.1);
+}
+
+.mobile-menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.desktop-icons {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.mobile-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.28s ease;
+  z-index: 1100;
+}
+
+.mobile-sidebar-overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.mobile-sidebar {
+  position: fixed;
+  top: 0;
+  right: -320px;
+  width: 300px;
+  max-width: 84vw;
+  height: 100vh;
+  background: #ffffff;
+  box-shadow: -12px 0 40px rgba(15, 23, 42, 0.14);
+  z-index: 1200;
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 20px 28px;
+}
+
+.mobile-sidebar.open {
+  right: 0;
+}
+
+.mobile-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.mobile-sidebar-logo {
+  height: 44px;
+  width: auto;
+  object-fit: contain;
+}
+
+.mobile-sidebar-close {
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  color: #111827;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-sidebar-nav a {
+  text-decoration: none;
+  color: #333;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 14px 12px;
+  border-radius: 14px;
+  transition: all 0.25s ease;
+}
+
+.mobile-sidebar-nav a:hover {
+  background: #f5f7fb;
+  color: #0065d0;
+}
+
+.mobile-sidebar-icons {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 24px;
+  border-top: 1px solid #eceff4;
+}
+
+.mobile-sidebar-icon-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: #1f2937;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: 14px;
+  transition: all 0.25s ease;
+}
+
+.mobile-sidebar-icon-link:hover {
+  background: #f5f7fb;
+  color: #0065d0;
+}
+
+@media (max-width: 1024px) {
+  .header {
+    padding: 14px 24px;
+  }
+
+  .logo img {
+    height: 48px;
+  }
+
+  .nav ul {
+    gap: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 12px 18px;
+  }
+
+  .logo img {
+    height: 52px;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .desktop-icons {
+    display: none;
+  }
+
+  .mobile-menu-toggle {
+    display: flex;
+  }
+
+  .header-icons {
+    gap: 14px;
+  }
 }
