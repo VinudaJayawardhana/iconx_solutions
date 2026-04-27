@@ -2,9 +2,8 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(32, 171, 255, 0.1), transparent 22%),
-    linear-gradient(180deg, #f5f8fc 0%, #eff3f8 48%, #ffffff 100%);
+ 
+  margin-top: 60px;
 }
 
 .products-content-wrapper {
@@ -12,7 +11,7 @@
   flex: 1;
   gap: 24px;
   padding: 108px 24px 32px;
-  max-width: 1440px;
+  max-width: 1600px;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
@@ -95,6 +94,7 @@
   box-sizing: border-box;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(22px);
+  margin-top: 288px; /* 🔥 pushes it down to match cards */
 }
 
 .filter-group {
@@ -331,7 +331,7 @@
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #2757d8;
+  color: #0071e3;
 }
 
 .products-page-intro h1 {
@@ -369,39 +369,68 @@
 }
 
 .grid-product-card {
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 24px;
-  padding: 18px;
+  background: #ffffff;
+  border: none;
+  border-radius: 28px;
+  padding: 26px 22px 24px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-  backdrop-filter: blur(14px);
+  align-items: center;
+  text-align: center;
+  transition: all 0.3s ease;
 }
 
 .grid-product-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 20px 42px rgba(15, 23, 42, 0.12);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.174);
 }
 
 .grid-product-image {
   width: 100%;
   aspect-ratio: 1 / 1;
-  overflow: hidden;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #edf2f8, #dbe4ef);
+  border-radius: 22px;
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .grid-product-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: 92%;
+  height: 92%;
+  object-fit: contain;
+}
+
+.product-color-dots {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 18px 0 14px;
+}
+
+.product-color-dots span {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid #d1d5db;
+  display: inline-block;
+}
+
+.product-color-dots span:nth-child(1) {
+  background: #2f3338;
+}
+
+.product-color-dots span:nth-child(2) {
+  background: #8799aa;
+}
+
+.product-color-dots span:nth-child(3) {
+  background: #d6d8da;
+}
+
+.product-color-dots span:nth-child(4) {
+  background: #f4f5f6;
 }
 
 .grid-product-image-fallback {
@@ -423,7 +452,7 @@
   padding: 6px 10px;
   border-radius: 999px;
   background: rgba(39, 87, 216, 0.08);
-  color: #2757d8;
+  color: #0071e3;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -431,25 +460,47 @@
 }
 
 .grid-product-card h4 {
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
+  color: #111827ba;
   margin: 0;
-  text-align: left;
+  text-align: center;
+}
+
+.koko-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
 }
 
 .grid-product-category {
-  margin: -2px 0 0;
-  font-size: 13px;
-  color: #64748b;
+  margin: 8px 0 0;
+  font-size: 16px;
+  color: #9ca3af;
+  font-weight: 600;
 }
 
 .product-price {
-  font-size: 1rem;
-  color: #0b6ef9;
+  font-size: 18px;
+  color: #0071e3;
   font-weight: 800;
-  margin: 2px 0 0;
+  margin: 14px 0 0;
 }
+
+.product-installment {
+  margin: 6px 0 16px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.product-installment span {
+  font-weight: 800;
+  background: linear-gradient(90deg, #8b5cf6, #ec4899, #38bdf8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 
 .product-card-actions {
   width: 100%;
@@ -459,34 +510,41 @@
   padding-top: 8px;
 }
 
+
 .add-to-cart-btn,
 .buy-now-btn {
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   border: none;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 700;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .add-to-cart-btn {
-  background: #e8f1ff;
-  color: #1640aa;
-}
-
-.add-to-cart-btn:hover,
-.buy-now-btn:hover {
-  transform: translateY(-1px);
+  background: #ffffff;
+  color: #000000c3;
+  border: 1px solid #000000c3;
+  transition: all 0.3s ease;
 }
 
 .buy-now-btn {
-  background: linear-gradient(135deg, #101827, #1f4bb8);
-  color: #fff;
-  box-shadow: 0 10px 24px rgba(31, 75, 184, 0.22);
+  background: #0071e3;
+  color: #ffffff;
+  transition: all 0.3s ease;
 }
 
+.add-to-cart-btn:hover {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+.buy-now-btn:hover {
+  background-color: #005bb5;
+  color: #ffffff;
+}
 .no-results {
   grid-column: 1 / -1;
   text-align: center;

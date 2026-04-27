@@ -1,7 +1,8 @@
 import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "../components/Header.js";
 import Footer from "../components/Footer.js";
-import "./Home.css";
+import "./home.css";
 import xiaomi from "../images/xiaomi15.jpg";
 import air from "../images/17promax.avif";
 import samsung from "../images/s25.jpg";
@@ -85,6 +86,8 @@ const sliderCards = [
 ];
 
 const Home = () => {
+  const navigate = useNavigate();
+
   useEffect(() => {
     const fadeItems = document.querySelectorAll("[data-fade-up]");
 
@@ -153,7 +156,7 @@ const Home = () => {
       <section className="products-showcase-section" data-fade-up style={{ "--fade-delay": "0ms" }}>
         <div className="products-showcase-header" data-fade-up style={{ "--fade-delay": "60ms" }}>
           <h2>Featured Products</h2>
-          <button className="more-products-btn">
+          <button className="more-products-btn" onClick={() => navigate("/products")}>
             View Products
           </button>
         </div>
@@ -256,7 +259,7 @@ const Home = () => {
       <section className="products-showcase-section" data-fade-up style={{ "--fade-delay": "0ms" }}>
         <div className="products-showcase-header" data-fade-up style={{ "--fade-delay": "60ms" }}>
           <h2>Android Products</h2>
-          <button className="more-products-btn">
+          <button className="more-products-btn" onClick={() => navigate("/products")}>
             View Products
           </button>
         </div>
@@ -366,7 +369,7 @@ const Home = () => {
       <section className="products-showcase-section" data-fade-up style={{ "--fade-delay": "0ms" }}>
         <div className="products-showcase-header" data-fade-up style={{ "--fade-delay": "60ms" }}>
           <h2>Browse iPads</h2>
-          <button className="more-products-btn">
+          <button className="more-products-btn" onClick={() => navigate("/products")}>
             View Products
           </button>
         </div>
@@ -466,7 +469,7 @@ const Home = () => {
       <section className="products-showcase-section" data-fade-up style={{ "--fade-delay": "0ms" }}>
         <div className="products-showcase-header" data-fade-up style={{ "--fade-delay": "60ms" }}>
           <h2>Browse Macs</h2>
-          <button className="more-products-btn" >
+          <button className="more-products-btn" onClick={() => navigate("/products")} >
             View Products
           </button>
         </div>
@@ -571,10 +574,10 @@ const Home = () => {
               accessories for everyday use.
             </p>
             <div className="accessories-banner-buttons">
-              <button className="accessory-pill-btn" >Watches</button>
-              <button className="accessory-pill-btn" >AirPods</button>
-              <button className="accessory-pill-btn" >Airtags</button>
-              <button className="accessory-pill-btn" >Cases</button>
+              <button className="accessory-pill-btn" onClick={() => navigate("/products")} >Watches</button>
+              <button className="accessory-pill-btn" onClick={() => navigate("/products")}>AirPods</button>
+              <button className="accessory-pill-btn" onClick={() => navigate("/products")}>Airtags</button>
+              <button className="accessory-pill-btn" onClick={() => navigate("/products")}>Cases</button>
             </div>
           </div>
         </div>
@@ -588,7 +591,7 @@ const Home = () => {
             </div>
             <div className="category-banner-content">
               <h3>Accessories</h3>
-              <button className="category-banner-btn">View Products</button>
+              <button className="category-banner-btn" onClick={() => navigate("/products")}>View Products</button>
             </div>
           </div>
 
@@ -598,7 +601,7 @@ const Home = () => {
             </div>
             <div className="category-banner-content">
               <h3>Speakers</h3>
-              <button className="category-banner-btn">View Products</button>
+              <button className="category-banner-btn" onClick={() => navigate("/products")}>View Products</button>
             </div>
           </div>
 
@@ -608,7 +611,7 @@ const Home = () => {
             </div>
             <div className="category-banner-content">
               <h3>Earbuds</h3>
-              <button className="category-banner-btn">View Products</button>
+              <button className="category-banner-btn" onClick={() => navigate("/products")}>View Products</button>
             </div>
           </div>
         </div>

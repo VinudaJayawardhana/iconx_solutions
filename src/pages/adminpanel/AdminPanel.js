@@ -214,13 +214,64 @@ const fmt = (n) => 'Rs ' + new Intl.NumberFormat('en-IN', { maximumFractionDigit
 /* ─── FIRESTORE MAPPERS ────────────────────────────────────── */
 const fromFirestore = (d) => {
   const h = Number(d.work_hour) || 0, r = Number(d.base_salary_rate) || 0;
-  const eff = calcEff(h, r);
-  return { id: d.id, staffId: d.emp_id || '—', hours: h, rate: r, salary: h * r, efficiency: eff, status: getStatus(eff) };
+  const daysPresent = Number(d.days_present) || 0;
+  const daysInMonth = Number(d.days_in_month) || 0;
+  const eff = daysInMonth > 0 ? Math.round((daysPresent / daysInMonth) * 100) : calcEff(h, r);
+  const computedSalary = Number(d.calculated_salary);
+  return {
+    id: d.id,
+    staffId: d.emp_id || '—',
+    hours: h,
+    rate: r,
+    salary: Number.isFinite(computedSalary) ? computedSalary : h * r,
+    efficiency: eff,
+    status: getStatus(eff),
+    employeeUid: d.employee_uid || "",
+    employeeName: d.employee_name || "",
+    daysPresent,
+    daysInMonth,
+    salaryMonth: d.salary_month || "",
+    salaryMode: d.salary_mode || "",
+  };
 };
-const toFirestore = (rec) => ({ emp_id: rec.staffId, work_hour: Number(rec.hours), base_salary_rate: Number(rec.rate), timestamp: new Date().toISOString() });
+function validateSalaryRecord(rec) {
+  const staffId = String(rec?.staffId || "").trim().toUpperCase();
+  const rate = Number(rec?.rate);
+  const daysPresent = Number(rec?.daysPresent);
+  const daysInMonth = Number(rec?.daysInMonth);
+
+  if (!staffId) throw new Error("Staff ID is required.");
+  if (!/^STF-\d{4}$/.test(staffId)) {
+    throw new Error("Incorrect ID input. Staff ID must be in the format STF-xxxx.");
+  }
+  if (String(rec?.rate ?? "").trim() === "") throw new Error("Base salary is required.");
+  if (Number.isNaN(rate)) throw new Error("Base salary must be a valid number.");
+  if (rate <= 0) throw new Error("Base salary must be greater than 0.");
+  if (String(rec?.salaryMonth || "").trim() === "") throw new Error("Salary month is required.");
+  if (String(rec?.daysInMonth ?? "").trim() === "") throw new Error("Total month days are required.");
+  if (Number.isNaN(daysInMonth)) throw new Error("Total month days must be a valid number.");
+  if (daysInMonth <= 0 || daysInMonth > 31) throw new Error("Total month days must be between 1 and 31.");
+  if (String(rec?.daysPresent ?? "").trim() === "") throw new Error("Days present is required.");
+  if (Number.isNaN(daysPresent)) throw new Error("Days present must be a valid number.");
+  if (daysPresent < 0) throw new Error("Days present cannot be less than 0.");
+  if (daysPresent > daysInMonth) throw new Error("Days present cannot be more than total month days.");
+}
+const toFirestore = (rec) => ({
+  emp_id: rec.staffId,
+  work_hour: Number(rec.daysPresent) || 0,
+  base_salary_rate: Number(rec.rate),
+  calculated_salary: Number(rec.salary) || 0,
+  employee_uid: rec.employeeUid || "",
+  employee_name: rec.employeeName || "",
+  days_present: Number(rec.daysPresent) || 0,
+  days_in_month: Number(rec.daysInMonth) || 0,
+  salary_month: rec.salaryMonth || "",
+  salary_mode: rec.salaryMode || "",
+  timestamp: new Date().toISOString(),
+});
 async function fbGetAll() { return (await fbGetAllRaw()).map(fromFirestore); }
-async function fbAdd(rec) { const ref = await fbAddRaw(rec.staffId, rec.hours, rec.rate); return { ...rec, id: ref.id }; }
-async function fbUpdate(id, rec) { await fbUpdateRaw(id, toFirestore(rec)); }
+async function fbAdd(rec) { validateSalaryRecord(rec); const ref = await fbAddRaw(rec.staffId, rec.hours, rec.rate, toFirestore(rec)); return { ...rec, id: ref.id }; }
+async function fbUpdate(id, rec) { validateSalaryRecord(rec); await fbUpdateRaw(id, toFirestore(rec)); }
 
 /* ─── SVG GAUGE ────────────────────────────────────────────── */
 function Gauge({ value, color, size = 80 }) {
@@ -289,29 +340,206 @@ function buildChart(type, opts = {}) {
 /* ─── PDF EXPORT ───────────────────────────────────────────── */
 async function exportPDF(records) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W=210,M=14;
-  const optimal=records.filter(r=>r.status==='optimal'),stable=records.filter(r=>r.status==='stable'),critical=records.filter(r=>r.status==='critical');
-  const totalPayout=records.reduce((s,r)=>s+r.salary,0),avgEff=records.length?Math.round(records.reduce((s,r)=>s+r.efficiency,0)/records.length):0;
-  doc.setFillColor(9,10,15);doc.rect(0,0,W,297,'F');doc.setFillColor(10,132,255);doc.rect(0,0,W,1.5,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(22);doc.setTextColor(245,245,247);doc.text('iconX',M,18);
-  doc.setFontSize(10);doc.setTextColor(110,110,115);doc.text('Admin Performance Report',M,25);doc.setFontSize(9);
-  doc.text(new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}),W-M,18,{align:'right'});doc.text(`Staff count: ${records.length}`,W-M,25,{align:'right'});
-  let y=34;
-  const kpis=[{label:'Total Payout',val:fmt(totalPayout),c:[10,132,255]},{label:'Optimal',val:optimal.length,c:[48,209,88]},{label:'Critical',val:critical.length,c:[255,69,58]},{label:'Avg Efficiency',val:avgEff+'%',c:[191,90,242]}];
-  const bW=(W-M*2-9)/4;
-  kpis.forEach((k,i)=>{const x=M+i*(bW+3);doc.setFillColor(17,19,24);doc.roundedRect(x,y,bW,20,2,2,'F');doc.setFillColor(...k.c);doc.rect(x,y,bW,1.2,'F');doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(110,110,115);doc.text(k.label,x+bW/2,y+8,{align:'center'});doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(245,245,247);doc.text(String(k.val),x+bW/2,y+16,{align:'center'});});
-  y+=28;
-  const addChart=(title,imgData,h=42)=>{if(y+h+12>275){doc.addPage();doc.setFillColor(9,10,15);doc.rect(0,0,W,297,'F');y=20;}doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(245,245,247);doc.text(title,M,y+5);doc.addImage(imgData,'PNG',M,y+8,W-M*2,h);y+=h+14;};
-  const sl=records.slice(0,12);
-  addChart('Salary Distribution',buildChart('bar',{labels:sl.map(r=>r.staffId.slice(-4)),values:sl.map(r=>r.salary),color:'#0a84ff',width:540,height:190}),44);
-  addChart('Work Hours Trend',buildChart('area',{labels:sl.map(r=>r.staffId.slice(-4)),values:sl.map(r=>r.hours),color:'#bf5af2',width:540,height:190}),44);
-  addChart('Efficiency Trend',buildChart('area',{labels:sl.map(r=>r.staffId.slice(-4)),values:sl.map(r=>r.efficiency),color:'#30d158',width:540,height:190}),44);
-  addChart('Status Breakdown',buildChart('donut',{slices:[{label:'Optimal',value:optimal.length,color:'#30d158'},{label:'Stable',value:stable.length,color:'#ff9f0a'},{label:'Critical',value:critical.length,color:'#ff453a'}],width:540,height:200}),48);
-  if(y>200){doc.addPage();doc.setFillColor(9,10,15);doc.rect(0,0,W,297,'F');y=20;}
-  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(245,245,247);doc.text('Staff Records Table',M,y+5);y+=10;
-  autoTable(doc,{startY:y,head:[['Staff ID','Hours','Rate','Net Salary','Efficiency','Status']],body:records.map(r=>[r.staffId,r.hours+'h','Rs '+r.rate,fmt(r.salary),r.efficiency+'%',r.status.toUpperCase()]),theme:'plain',headStyles:{fillColor:[17,19,24],textColor:[110,110,115],fontSize:9,fontStyle:'bold'},bodyStyles:{fillColor:[9,10,15],textColor:[245,245,247],fontSize:9},alternateRowStyles:{fillColor:[17,19,24]},didParseCell:(d)=>{if(d.section==='body'&&d.column.index===5){const s=String(d.cell.raw).toLowerCase();d.cell.styles.textColor=s==='optimal'?[48,209,88]:s==='stable'?[255,159,10]:[255,69,58];d.cell.styles.fontStyle='bold';}},margin:{left:M,right:M}});
-  const total=doc.getNumberOfPages();for(let i=1;i<=total;i++){doc.setPage(i);doc.setFillColor(9,10,15);doc.rect(0,285,W,12,'F');doc.setFillColor(10,132,255);doc.rect(0,295,W,2,'F');doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(110,110,115);doc.text(`Page ${i} of ${total}`,W/2,291,{align:'center'});doc.text('iconX Admin System',M,291);}
-  doc.save('iconX_performance_report.pdf');
+  const W = 210;
+  const H = 297;
+  const M = 14;
+  const optimal = records.filter((r) => r.status === 'optimal');
+  const stable = records.filter((r) => r.status === 'stable');
+  const critical = records.filter((r) => r.status === 'critical');
+  const totalPayout = records.reduce((s, r) => s + (Number(r.salary) || 0), 0);
+  const avgEff = records.length ? Math.round(records.reduce((s, r) => s + (Number(r.efficiency) || 0), 0) / records.length) : 0;
+  const avgAttendance = records.length ? Math.round(records.reduce((s, r) => s + (Number(r.daysPresent) || 0), 0) / records.length) : 0;
+  const reportMonths = [...new Set(records.map((r) => r.salaryMonth).filter(Boolean))];
+  const topPayout = [...records].sort((a, b) => (b.salary || 0) - (a.salary || 0))[0] || null;
+  const highestAttendance = [...records].sort((a, b) => ((b.daysPresent || 0) / Math.max(b.daysInMonth || 1, 1)) - ((a.daysPresent || 0) / Math.max(a.daysInMonth || 1, 1)))[0] || null;
+
+  const paintPage = () => {
+    doc.setFillColor(9, 10, 15);
+    doc.rect(0, 0, W, H, 'F');
+    doc.setFillColor(10, 132, 255);
+    doc.rect(0, 0, W, 1.8, 'F');
+  };
+
+  const ensureSpace = (needed) => {
+    if (y + needed <= 276) return;
+    doc.addPage();
+    paintPage();
+    y = 20;
+  };
+
+  paintPage();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(23);
+  doc.setTextColor(245, 245, 247);
+  doc.text('iconX Salary Report', M, 18);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(110, 110, 115);
+  doc.text('Attendance-based monthly payroll summary', M, 25);
+  doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), W - M, 18, { align: 'right' });
+  doc.text(`Records: ${records.length}`, W - M, 25, { align: 'right' });
+
+  let y = 34;
+  const kpis = [
+    { label: 'Total Payout', val: fmt(totalPayout), c: [10, 132, 255] },
+    { label: 'Avg Attendance', val: `${avgAttendance} days`, c: [191, 90, 242] },
+    { label: 'Optimal Staff', val: optimal.length, c: [48, 209, 88] },
+    { label: 'Critical Staff', val: critical.length, c: [255, 69, 58] },
+  ];
+  const cardW = (W - M * 2 - 9) / 4;
+  kpis.forEach((k, i) => {
+    const x = M + i * (cardW + 3);
+    doc.setFillColor(17, 19, 24);
+    doc.roundedRect(x, y, cardW, 21, 2, 2, 'F');
+    doc.setFillColor(...k.c);
+    doc.rect(x, y, cardW, 1.4, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(110, 110, 115);
+    doc.text(k.label, x + cardW / 2, y + 8, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(245, 245, 247);
+    doc.text(String(k.val), x + cardW / 2, y + 16, { align: 'center' });
+  });
+
+  y += 29;
+  ensureSpace(32);
+  doc.setFillColor(17, 19, 24);
+  doc.roundedRect(M, y, W - M * 2, 28, 3, 3, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(245, 245, 247);
+  doc.text('Report Snapshot', M + 4, y + 7);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(110, 110, 115);
+  doc.text(`Months covered: ${reportMonths.length ? reportMonths.join(', ') : 'Not specified'}`, M + 4, y + 14);
+  doc.text(`Average efficiency: ${avgEff}%`, M + 4, y + 20);
+  doc.text(
+    `Top payout: ${topPayout ? `${topPayout.staffId} (${fmt(topPayout.salary)})` : '-'}`,
+    W / 2 + 4,
+    y + 14
+  );
+  doc.text(
+    `Best attendance: ${highestAttendance ? `${highestAttendance.staffId} (${highestAttendance.daysPresent || 0}/${highestAttendance.daysInMonth || 0})` : '-'}`,
+    W / 2 + 4,
+    y + 20
+  );
+
+  y += 36;
+  const addChart = (title, imgData, h = 42) => {
+    ensureSpace(h + 14);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(245, 245, 247);
+    doc.text(title, M, y + 5);
+    doc.addImage(imgData, 'PNG', M, y + 8, W - M * 2, h);
+    y += h + 14;
+  };
+
+  const slice = [...records]
+    .sort((a, b) => (b.salary || 0) - (a.salary || 0))
+    .slice(0, 12);
+
+  addChart(
+    'Top Salary Distribution',
+    buildChart('bar', {
+      labels: slice.map((r) => r.staffId.slice(-4)),
+      values: slice.map((r) => r.salary),
+      color: '#0a84ff',
+      width: 540,
+      height: 190,
+    }),
+    44
+  );
+  addChart(
+    'Attendance by Staff',
+    buildChart('area', {
+      labels: slice.map((r) => r.staffId.slice(-4)),
+      values: slice.map((r) => Math.round(((r.daysPresent || 0) / Math.max(r.daysInMonth || 1, 1)) * 100)),
+      color: '#bf5af2',
+      width: 540,
+      height: 190,
+    }),
+    44
+  );
+  addChart(
+    'Status Breakdown',
+    buildChart('donut', {
+      slices: [
+        { label: 'Optimal', value: optimal.length, color: '#30d158' },
+        { label: 'Stable', value: stable.length, color: '#ff9f0a' },
+        { label: 'Critical', value: critical.length, color: '#ff453a' },
+      ],
+      width: 540,
+      height: 200,
+    }),
+    48
+  );
+
+  ensureSpace(18);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(245, 245, 247);
+  doc.text('Salary Records', M, y + 5);
+  y += 10;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Staff ID', 'Month', 'Attendance', 'Base Salary', 'Net Salary', 'Efficiency', 'Status']],
+    body: records.map((r) => [
+      r.staffId,
+      r.salaryMonth || '-',
+      `${r.daysPresent || 0}/${r.daysInMonth || 0}`,
+      fmt(r.rate || 0),
+      fmt(r.salary || 0),
+      `${r.efficiency || 0}%`,
+      String(r.status || '').toUpperCase(),
+    ]),
+    theme: 'plain',
+    headStyles: {
+      fillColor: [17, 19, 24],
+      textColor: [110, 110, 115],
+      fontSize: 9,
+      fontStyle: 'bold',
+      cellPadding: 2.8,
+    },
+    bodyStyles: {
+      fillColor: [9, 10, 15],
+      textColor: [245, 245, 247],
+      fontSize: 8.6,
+      cellPadding: 2.8,
+    },
+    alternateRowStyles: { fillColor: [17, 19, 24] },
+    didParseCell: (d) => {
+      if (d.section === 'body' && d.column.index === 6) {
+        const s = String(d.cell.raw).toLowerCase();
+        d.cell.styles.textColor = s === 'OPTIMAL'.toLowerCase()
+          ? [48, 209, 88]
+          : s === 'STABLE'.toLowerCase()
+            ? [255, 159, 10]
+            : [255, 69, 58];
+        d.cell.styles.fontStyle = 'bold';
+      }
+    },
+    margin: { left: M, right: M },
+  });
+
+  const total = doc.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i);
+    doc.setFillColor(9, 10, 15);
+    doc.rect(0, 285, W, 12, 'F');
+    doc.setFillColor(10, 132, 255);
+    doc.rect(0, 295, W, 2, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(110, 110, 115);
+    doc.text(`Page ${i} of ${total}`, W / 2, 291, { align: 'center' });
+    doc.text('iconX Admin System', M, 291);
+  }
+  doc.save('iconX_salary_report.pdf');
 }
 
 /* ─── EXCEL EXPORT ─────────────────────────────────────────── */
@@ -447,11 +675,46 @@ function RecordModal({ record, onClose }) {
 /* ─── EDIT/ADD MODAL ───────────────────────────────────────── */
 function EditModal({ record, onClose, onSave }) {
   const [f, setF] = useState({ staffId: record?.staffId || '', hours: record?.hours || '', rate: record?.rate || '' });
+  const [error, setError] = useState("");
+  const validateField = (key, value) => {
+    const trimmedValue = String(value || "").trim();
+
+    if (key === "staffId") {
+      if (!trimmedValue) return "Staff ID is required.";
+      if (!/^STF-\d{4}$/i.test(trimmedValue)) return "Incorrect ID input. Staff ID must be in the format STF-xxxx.";
+      return "";
+    }
+
+    if (key === "hours") {
+      if (!trimmedValue) return "Work hours are required.";
+      if (Number.isNaN(Number(trimmedValue))) return "Work hours must be a valid number.";
+      if (Number(trimmedValue) < 0) return "Work hours cannot be less than 0.";
+      return "";
+    }
+
+    if (key === "rate") {
+      if (!trimmedValue) return "Hourly rate is required.";
+      if (Number.isNaN(Number(trimmedValue))) return "Hourly rate must be a valid number.";
+      if (Number(trimmedValue) < 0) return "Hourly rate cannot be less than 0.";
+      return "";
+    }
+
+    return "";
+  };
   const h = parseFloat(f.hours) || 0, r = parseFloat(f.rate) || 0;
   const salary = h * r, eff = calcEff(h, r), status = getStatus(eff);
-  const up = (k) => (e) => setF(p => ({ ...p, [k]: e.target.value }));
+  const up = (k) => (e) => {
+    const nextValue = e.target.value;
+    setF(p => ({ ...p, [k]: nextValue }));
+    setError(validateField(k, nextValue));
+  };
   const save = () => {
-    if (!f.staffId.trim() || !f.hours || !f.rate) return;
+    const staffIdError = validateField("staffId", f.staffId);
+    if (staffIdError) return setError(staffIdError);
+    const hoursError = validateField("hours", f.hours);
+    if (hoursError) return setError(hoursError);
+    const rateError = validateField("rate", f.rate);
+    if (rateError) return setError(rateError);
     onSave({ ...(record||{}), id: record?.id||Date.now().toString(), staffId: f.staffId.trim().toUpperCase(), hours: h, rate: r, salary, efficiency: eff, status });
   };
   return (
@@ -461,10 +724,11 @@ function EditModal({ record, onClose, onSave }) {
           <div className="ap-modal-title">{record ? 'Edit Record' : 'Add Staff'}</div>
           <button className="ap-modal-close" onClick={onClose}>×</button>
         </div>
+        {error && <div style={{ color: "#ff453a", fontSize: 13, marginBottom: 12 }}>{error}</div>}
         {[['staffId','Staff ID','STF-011','text'],['hours','Work Hours','200','number'],['rate','Hourly Rate (Rs)','45','number']].map(([k,l,ph,t])=>(
           <div key={k} className="ap-form-group">
             <label className="ap-form-label">{l}</label>
-            <input className="ap-form-input" type={t} value={f[k]} onChange={up(k)} placeholder={ph} />
+            <input className="ap-form-input" type={t} value={f[k]} onChange={up(k)} placeholder={ph} min={t === 'number' ? '0' : undefined} step={k === 'hours' || k === 'rate' ? '0.01' : undefined} />
           </div>
         ))}
         {h > 0 && r > 0 && (
@@ -1293,6 +1557,41 @@ function exportCrudPdf({ title, items, fields, collectionName }) {
   doc.save(insights.filename);
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^[0-9+\-\s()]{7,20}$/;
+
+function validateCrudField(field, rawValue) {
+  const value = typeof rawValue === "string" ? rawValue.trim() : rawValue;
+
+  if (field.required && !String(value ?? "").trim()) {
+    return `${field.label} is required.`;
+  }
+
+  if (!String(value ?? "").trim()) {
+    return "";
+  }
+
+  if (field.type === "email" && !EMAIL_REGEX.test(String(value))) {
+    return `Please enter a valid ${field.label.toLowerCase()}.`;
+  }
+
+  if (field.key === "phone" && !PHONE_REGEX.test(String(value))) {
+    return "Please enter a valid phone number.";
+  }
+
+  if (field.type === "number") {
+    const numericValue = Number(value);
+    if (Number.isNaN(numericValue)) {
+      return `${field.label} must be a valid number.`;
+    }
+    if (numericValue < 0) {
+      return `${field.label} cannot be negative.`;
+    }
+  }
+
+  return "";
+}
+
 function CrudEntityModal({ title, fields, initialData, onClose, onSave }) {
   const [form, setForm] = useState(() => {
     const next = {};
@@ -1301,11 +1600,22 @@ function CrudEntityModal({ title, fields, initialData, onClose, onSave }) {
     });
     return next;
   });
+  const [error, setError] = useState("");
 
-  const up = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
+  const up = (key) => (e) => {
+    setForm((prev) => ({ ...prev, [key]: e.target.value }));
+    setError("");
+  };
 
   const submit = (e) => {
     e.preventDefault();
+    for (const field of fields) {
+      const message = validateCrudField(field, form[field.key]);
+      if (message) {
+        setError(message);
+        return;
+      }
+    }
     onSave(form);
   };
 
@@ -1317,6 +1627,11 @@ function CrudEntityModal({ title, fields, initialData, onClose, onSave }) {
           <button className="ap-modal-close" onClick={onClose}>×</button>
         </div>
         <form onSubmit={submit}>
+          {error && (
+            <div style={{ color: "#ff453a", fontSize: 13, marginBottom: 12 }}>
+              {error}
+            </div>
+          )}
           {fields.map((field) => (
             <div className="ap-form-group" key={field.key}>
               <label className="ap-form-label">{field.label}</label>
@@ -1327,6 +1642,7 @@ function CrudEntityModal({ title, fields, initialData, onClose, onSave }) {
                 onChange={up(field.key)}
                 placeholder={field.placeholder}
                 required={field.required}
+                min={field.type === "number" ? "0" : undefined}
               />
             </div>
           ))}
@@ -1518,8 +1834,17 @@ function CrudPanel({ title, collectionName, fields, search, primaryKey, descript
 function exportCommercePdf(orders, cartItems) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
+  const pageHeight = 297;
   const margin = 14;
   const totalRevenue = orders.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+  const totalOrderedItems = orders.reduce(
+    (sum, order) => sum + (order.items || []).reduce((inner, item) => inner + (item.quantity || 1), 0),
+    0
+  );
+  const totalCartQty = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+  const avgOrderValue = orders.length ? totalRevenue / orders.length : 0;
+  const topOrder = [...orders].sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0))[0] || null;
+  const latestOrder = [...orders].sort((a, b) => `${b.createdAt || ""}`.localeCompare(`${a.createdAt || ""}`))[0] || null;
   const orderStatus = groupCounts(orders, (order) => order.status);
   const topProducts = groupCounts(
     orders.flatMap((order) => order.items || []),
@@ -1527,42 +1852,74 @@ function exportCommercePdf(orders, cartItems) {
   );
   const revenueTrend = buildTimeline(orders, (order) => Number(order.total) || 0);
 
-  doc.setFillColor(9, 10, 15);
-  doc.rect(0, 0, pageWidth, 297, "F");
-  doc.setFillColor(10, 132, 255);
-  doc.rect(0, 0, pageWidth, 2, "F");
+  const paintPage = () => {
+    doc.setFillColor(9, 10, 15);
+    doc.rect(0, 0, pageWidth, pageHeight, "F");
+    doc.setFillColor(10, 132, 255);
+    doc.rect(0, 0, pageWidth, 2, "F");
+  };
+
+  const ensureSpace = (needed, currentY) => {
+    if (currentY + needed <= 276) return currentY;
+    doc.addPage();
+    paintPage();
+    return 20;
+  };
+
+  paintPage();
   doc.setTextColor(245, 245, 247);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("Commerce Report", margin, 18);
+  doc.setFontSize(21);
+  doc.text("iconX Commerce Report", margin, 18);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   doc.setTextColor(160, 166, 176);
+  doc.text("Cart and order performance summary", margin, 25);
+  doc.setFontSize(9);
   doc.text(new Date().toLocaleDateString("en-GB"), pageWidth - margin, 18, { align: "right" });
+  doc.text(`Orders: ${orders.length}`, pageWidth - margin, 25, { align: "right" });
 
   const cards = [
-    ["Orders", orders.length],
-    ["Revenue", fmt(totalRevenue)],
-    ["Cart Items", cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0)],
-    ["Pending", orders.filter((order) => String(order.status || "").toLowerCase() === "pending").length],
+    ["Orders", orders.length, [10, 132, 255]],
+    ["Revenue", fmt(totalRevenue), [48, 209, 88]],
+    ["Cart Qty", totalCartQty, [191, 90, 242]],
+    ["Pending", orders.filter((order) => String(order.status || "").toLowerCase() === "pending").length, [255, 159, 10]],
   ];
   const cardWidth = (pageWidth - margin * 2 - 9) / 4;
-  cards.forEach(([label, value], index) => {
+  cards.forEach(([label, value, color], index) => {
     const x = margin + index * (cardWidth + 3);
     doc.setFillColor(17, 19, 24);
-    doc.roundedRect(x, 28, cardWidth, 20, 2, 2, "F");
+    doc.roundedRect(x, 30, cardWidth, 21, 2, 2, "F");
+    doc.setFillColor(...color);
+    doc.rect(x, 30, cardWidth, 1.3, "F");
     doc.setTextColor(160, 166, 176);
-    doc.text(String(label), x + 4, 36);
+    doc.text(String(label), x + cardWidth / 2, 38, { align: "center" });
     doc.setTextColor(245, 245, 247);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
-    doc.text(String(value), x + 4, 44);
+    doc.text(String(value), x + cardWidth / 2, 46, { align: "center" });
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
   });
 
-  let y = 56;
+  let y = 59;
+  doc.setFillColor(17, 19, 24);
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 28, 3, 3, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(245, 245, 247);
+  doc.text("Commerce Snapshot", margin + 4, y + 7);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(160, 166, 176);
+  doc.text(`Average order value: ${fmt(avgOrderValue)}`, margin + 4, y + 14);
+  doc.text(`Ordered item qty: ${totalOrderedItems}`, margin + 4, y + 20);
+  doc.text(`Top order: ${topOrder ? `${topOrder.id} (${fmt(topOrder.total)})` : "-"}`, pageWidth / 2 + 4, y + 14);
+  doc.text(`Latest order: ${latestOrder ? formatDateTime(latestOrder.createdAt) : "-"}`, pageWidth / 2 + 4, y + 20);
+
+  y += 36;
   const addChart = (title, imgData, height = 44) => {
+    y = ensureSpace(height + 16, y);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(245, 245, 247);
     doc.text(title, margin, y + 5);
@@ -1572,8 +1929,8 @@ function exportCommercePdf(orders, cartItems) {
 
   if (topProducts.length) {
     addChart("Top Ordered Products", buildChart("bar", {
-      labels: topProducts.map((item) => item.label.slice(0, 10)),
-      values: topProducts.map((item) => item.value),
+      labels: topProducts.slice(0, 10).map((item) => item.label.slice(0, 12)),
+      values: topProducts.slice(0, 10).map((item) => item.value),
       color: "#0a84ff",
       width: 540,
       height: 190,
@@ -1601,41 +1958,82 @@ function exportCommercePdf(orders, cartItems) {
     }), 48);
   }
 
+  y = ensureSpace(18, y);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(245, 245, 247);
+  doc.text("Recent Orders", margin, y + 5);
+  y += 8;
+
   autoTable(doc, {
     startY: y,
     head: [["Order ID", "Customer", "Items", "Total", "Status", "Created"]],
     body: orders.slice(0, 20).map((order) => [
       order.id,
-      order.customer?.fullName || "—",
+      order.customer?.fullName || "-",
       (order.items || []).reduce((sum, item) => sum + (item.quantity || 1), 0),
       fmt(order.total),
-      order.status || "—",
+      order.status || "-",
       formatDateTime(order.createdAt),
     ]),
     theme: "plain",
-    headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8 },
-    bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8 },
+    headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8.5, fontStyle: "bold", cellPadding: 2.8 },
+    bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8.2, cellPadding: 2.8 },
     alternateRowStyles: { fillColor: [17, 19, 24] },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index === 4) {
+        const status = String(data.cell.raw || "").toLowerCase();
+        data.cell.styles.textColor = status === "delivered"
+          ? [48, 209, 88]
+          : status === "pending"
+            ? [255, 159, 10]
+            : status === "cancelled"
+              ? [255, 69, 58]
+              : [10, 132, 255];
+        data.cell.styles.fontStyle = "bold";
+      }
+    },
     margin: { left: margin, right: margin },
   });
 
+  let cartStartY = doc.lastAutoTable.finalY + 10;
+  cartStartY = ensureSpace(22, cartStartY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(245, 245, 247);
+  doc.text("Live Cart Snapshot", margin, cartStartY + 5);
+
   autoTable(doc, {
-    startY: doc.lastAutoTable.finalY + 8,
+    startY: cartStartY + 8,
     head: [["Cart Item", "Price", "Qty", "Subtotal"]],
     body: cartItems.map((item) => [
-      item.name || "—",
+      item.name || "-",
       fmt(item.price),
       item.quantity || 1,
       fmt((Number(item.price) || 0) * (item.quantity || 1)),
     ]),
     theme: "plain",
-    headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8 },
-    bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8 },
+    headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8.5, fontStyle: "bold", cellPadding: 2.8 },
+    bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8.2, cellPadding: 2.8 },
     alternateRowStyles: { fillColor: [17, 19, 24] },
     margin: { left: margin, right: margin },
   });
 
-  doc.save("commerce_report.pdf");
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFillColor(9, 10, 15);
+    doc.rect(0, 285, pageWidth, 12, "F");
+    doc.setFillColor(10, 132, 255);
+    doc.rect(0, 295, pageWidth, 2, "F");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(160, 166, 176);
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, 291, { align: "center" });
+    doc.text("iconX Commerce Admin", margin, 291);
+  }
+
+  doc.save("iconX_commerce_report.pdf");
 }
 
 function CommercePanel({ search }) {
@@ -1644,7 +2042,10 @@ function CommercePanel({ search }) {
   const [busy, setBusy] = useState(true);
 
   useEffect(() => {
-    const syncCart = () => setCartItems(getCartItems());
+    const syncCart = () => {
+      setCartItems(JSON.parse(localStorage.getItem("cart")) || []);
+    };
+
     syncCart();
     window.addEventListener(CART_EVENT, syncCart);
     window.addEventListener("storage", syncCart);
@@ -1653,11 +2054,6 @@ function CommercePanel({ search }) {
       collection(db, "orders"),
       (snapshot) => {
         setOrders(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })));
-        setBusy(false);
-      },
-      (error) => {
-        console.error("Failed loading orders:", error);
-        setOrders([]);
         setBusy(false);
       }
     );
@@ -1669,142 +2065,120 @@ function CommercePanel({ search }) {
     };
   }, []);
 
+  /* =========================
+     CART CRUD
+  ========================= */
+
+  const updateCartQty = (id, qty) => {
+    let cart = JSON.parse(localStorage.getItem("cart")) || [];
+
+    cart = cart.map(item =>
+      item.id === id ? { ...item, quantity: qty } : item
+    );
+
+    localStorage.setItem("cart", JSON.stringify(cart));
+    window.dispatchEvent(new Event(CART_EVENT));
+  };
+
+  const deleteCartItem = (id) => {
+    let cart = JSON.parse(localStorage.getItem("cart")) || [];
+
+    cart = cart.filter(item => item.id !== id);
+
+    localStorage.setItem("cart", JSON.stringify(cart));
+    window.dispatchEvent(new Event(CART_EVENT));
+  };
+
+  /* =========================
+     ORDER CRUD
+  ========================= */
+
+  const updateOrderStatus = async (id, status) => {
+    await updateDoc(doc(db, "orders", id), { status });
+  };
+
+  const deleteOrder = async (id) => {
+    await deleteDoc(doc(db, "orders", id));
+  };
+
   const filteredOrders = orders.filter((order) =>
     JSON.stringify(order).toLowerCase().includes((search || "").toLowerCase())
   );
-  const totalRevenue = filteredOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
-  const pendingCount = filteredOrders.filter((order) => String(order.status || "").toLowerCase() === "pending").length;
-  const fulfilledCount = filteredOrders.filter((order) => ["paid", "completed", "delivered"].includes(String(order.status || "").toLowerCase())).length;
-  const cartQty = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
-  const statusData = groupCounts(filteredOrders, (order) => order.status).map((item, index) => ({
-    ...item,
-    color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4],
-  }));
-  const topProducts = groupCounts(filteredOrders.flatMap((order) => order.items || []), (item) => item.name);
-  const revenueTrend = buildTimeline(filteredOrders, (order) => Number(order.total) || 0);
 
   return (
-    <>
-      <div className="ap-filter-bar">
-        <div>
-          <div className="ap-settings-title">Commerce Report</div>
-          <div className="ap-settings-sub">Combine live cart state with placed orders for a single admin report.</div>
-        </div>
-        <div className="ap-filter-spacer" />
-        <button className="ap-export-btn pdf" onClick={() => exportCommercePdf(filteredOrders, cartItems)}>
-          Export Commerce PDF
-        </button>
+    <div className="ap-grid-2">
+
+      {/* ORDERS TABLE */}
+      <div className="ap-panel">
+        <div className="ap-panel-title">Orders</div>
+
+        <table className="ap-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Items</th>
+              <th>Total</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {filteredOrders.map((order) => (
+              <tr key={order.id}>
+                <td>{order.customer?.fullName || "-"}</td>
+                <td>{(order.items || []).length}</td>
+                <td>{order.total}</td>
+
+                <td>{order.status}</td>
+
+                <td>
+                  <button onClick={() => updateOrderStatus(order.id, "approved")}>✔</button>
+                  <button onClick={() => updateOrderStatus(order.id, "rejected")}>✖</button>
+                  <button onClick={() => deleteOrder(order.id)}>🗑</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      <div className="ap-grid-4">
-        <div className="ap-stat-card blue"><div className="ap-stat-icon blue">O</div><div className="ap-stat-label">Orders</div><div className="ap-stat-value">{filteredOrders.length}</div><div className="ap-stat-sub">Orders in current view</div></div>
-        <div className="ap-stat-card green"><div className="ap-stat-icon green">R</div><div className="ap-stat-label">Revenue</div><div className="ap-stat-value" style={{ color: "var(--green)" }}>{fmt(totalRevenue)}</div><div className="ap-stat-sub">Total order value</div></div>
-        <div className="ap-stat-card amber"><div className="ap-stat-icon amber">C</div><div className="ap-stat-label">Cart Qty</div><div className="ap-stat-value" style={{ color: "var(--amber)" }}>{cartQty}</div><div className="ap-stat-sub">Live local cart snapshot</div></div>
-        <div className="ap-stat-card purple"><div className="ap-stat-icon purple">P</div><div className="ap-stat-label">Pending</div><div className="ap-stat-value" style={{ color: "var(--purple)" }}>{pendingCount}</div><div className="ap-stat-sub">{fulfilledCount} fulfilled or completed</div></div>
+      {/* CART TABLE */}
+      <div className="ap-panel">
+        <div className="ap-panel-title">Cart</div>
+
+        <table className="ap-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Qty</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {cartItems.map((item) => (
+              <tr key={item.id}>
+                <td>{item.name}</td>
+
+                <td>
+                  <button onClick={() => updateCartQty(item.id, (item.quantity || 1) - 1)}>-</button>
+                  {item.quantity || 1}
+                  <button onClick={() => updateCartQty(item.id, (item.quantity || 1) + 1)}>+</button>
+                </td>
+
+                <td>
+                  <button onClick={() => deleteCartItem(item.id)}>Remove</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      <div className="ap-grid-2">
-        <div className="ap-panel">
-          <div className="ap-panel-title">Top Ordered Products <span className="ap-panel-sub">Across filtered orders</span></div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={topProducts.map((item) => ({ name: item.label, value: item.value }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} />
-              <YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} />
-              <Tooltip content={<Tip />} />
-              <Bar dataKey="value" fill="#0a84ff" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="ap-panel">
-          <div className="ap-panel-title">Order Status <span className="ap-panel-sub">Live distribution</span></div>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={statusData} dataKey="value" nameKey="label" innerRadius={50} outerRadius={80} paddingAngle={2}>
-                {statusData.map((item) => <Cell key={item.label} fill={item.color} />)}
-              </Pie>
-              <Tooltip content={<Tip />} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="ap-panel" style={{ marginBottom: 16 }}>
-        <div className="ap-panel-title">Revenue Trend <span className="ap-panel-sub">Most recent order activity</span></div>
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={revenueTrend.map((item) => ({ name: item.label, value: item.value }))}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} />
-            <YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} />
-            <Tooltip content={<Tip />} />
-            <Area type="monotone" dataKey="value" stroke="#30d158" fill="rgba(48,209,88,0.25)" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="ap-grid-2">
-        <div className="ap-panel">
-          <div className="ap-panel-title">Orders <span className="ap-panel-sub">{busy ? "Loading..." : `${filteredOrders.length} records`}</span></div>
-          <div className="ap-table-wrap">
-            <table className="ap-table">
-              <thead>
-                <tr>
-                  <th>Customer</th>
-                  <th>Items</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {busy && <tr><td colSpan={5} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>Loading orders...</td></tr>}
-                {!busy && filteredOrders.map((order) => (
-                  <tr key={order.id} className="data-row">
-                    <td>{order.customer?.fullName || "—"}</td>
-                    <td>{(order.items || []).reduce((sum, item) => sum + (item.quantity || 1), 0)}</td>
-                    <td>{fmt(order.total)}</td>
-                    <td>{order.status || "—"}</td>
-                    <td>{formatDateTime(order.createdAt)}</td>
-                  </tr>
-                ))}
-                {!busy && filteredOrders.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>No orders found</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="ap-panel">
-          <div className="ap-panel-title">Live Cart Snapshot <span className="ap-panel-sub">{cartItems.length} line items in browser cart</span></div>
-          <div className="ap-table-wrap">
-            <table className="ap-table">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Price</th>
-                  <th>Qty</th>
-                  <th>Subtotal</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cartItems.map((item) => (
-                  <tr key={item.id} className="data-row">
-                    <td>{item.name || "—"}</td>
-                    <td>{fmt(item.price)}</td>
-                    <td>{item.quantity || 1}</td>
-                    <td>{fmt((Number(item.price) || 0) * (item.quantity || 1))}</td>
-                  </tr>
-                ))}
-                {cartItems.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>Cart is empty in this browser session</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
-
 function exportTradeInPdf(items) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
@@ -1903,10 +2277,11 @@ function exportTradeInPdf(items) {
 
   doc.save("mobile_trade_in_report.pdf");
 }
-
 function TradeInPanel({ search }) {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(true);
+  const [viewItem, setViewItem] = useState(null);
+  const [editItem, setEditItem] = useState(null);
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -1925,16 +2300,61 @@ function TradeInPanel({ search }) {
     return unsub;
   }, []);
 
+  const handleUpdateTrade = async (id, data) => {
+    try {
+      await updateDoc(doc(db, "tradeIns", id), {
+        customerName: data.customerName || "",
+        phone: data.phone || "",
+        brand: data.brand || "",
+        model: data.model || "",
+        imei: data.imei || "",
+        storage: data.storage || "",
+        estimatedValue: Number(data.estimatedValue) || 0,
+        status: data.status || "Pending",
+        notes: data.notes || "",
+        updatedAt: serverTimestamp(),
+      });
+
+      setEditItem(null);
+      alert("Mobile trade-in updated successfully.");
+    } catch (error) {
+      console.error("Update failed:", error);
+      alert("Failed to update mobile trade-in.");
+    }
+  };
+
+  const handleDeleteTrade = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this mobile trade-in request?")) return;
+
+    try {
+      await deleteDoc(doc(db, "tradeIns", id));
+      alert("Mobile trade-in deleted successfully.");
+    } catch (error) {
+      console.error("Delete failed:", error);
+      alert("Failed to delete mobile trade-in.");
+    }
+  };
+
   const filtered = items.filter((item) =>
     JSON.stringify(item).toLowerCase().includes((search || "").toLowerCase())
   );
+
   const mobileOnly = filtered.filter(isMobileTradeIn);
-  const avgEstimate = mobileOnly.length ? Math.round(mobileOnly.reduce((sum, item) => sum + getTradeInValue(item), 0) / mobileOnly.length) : 0;
+
+  const avgEstimate = mobileOnly.length
+    ? Math.round(
+        mobileOnly.reduce((sum, item) => sum + getTradeInValue(item), 0) /
+          mobileOnly.length
+      )
+    : 0;
+
   const brandMix = groupCounts(mobileOnly, (item) => item.brand);
+
   const statusMix = groupCounts(mobileOnly, (item) => item.status).map((item, index) => ({
     ...item,
     color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4],
   }));
+
   const estimateTrend = buildTimeline(mobileOnly, (item) => getTradeInValue(item));
 
   return (
@@ -1942,24 +2362,64 @@ function TradeInPanel({ search }) {
       <div className="ap-filter-bar">
         <div>
           <div className="ap-settings-title">Mobile Trade-In</div>
-          <div className="ap-settings-sub">Visual report for mobile trade-in requests saved from the trade-in calculator.</div>
+          <div className="ap-settings-sub">
+            Visual report for mobile trade-in requests saved from the trade-in calculator.
+          </div>
         </div>
+
         <div className="ap-filter-spacer" />
+
         <button className="ap-export-btn pdf" onClick={() => exportTradeInPdf(filtered)}>
           Export Trade-In PDF
         </button>
       </div>
 
       <div className="ap-grid-4">
-        <div className="ap-stat-card blue"><div className="ap-stat-icon blue">M</div><div className="ap-stat-label">Mobile Leads</div><div className="ap-stat-value">{mobileOnly.length}</div><div className="ap-stat-sub">Smartphone trade-ins in current view</div></div>
-        <div className="ap-stat-card green"><div className="ap-stat-icon green">A</div><div className="ap-stat-label">Avg Estimate</div><div className="ap-stat-value" style={{ color: "var(--green)" }}>{fmt(avgEstimate)}</div><div className="ap-stat-sub">Average expected value</div></div>
-        <div className="ap-stat-card amber"><div className="ap-stat-icon amber">P</div><div className="ap-stat-label">Pending Requests</div><div className="ap-stat-value" style={{ color: "var(--amber)" }}>{mobileOnly.filter((item) => String(item.status || "").toLowerCase() === "pending").length}</div><div className="ap-stat-sub">Awaiting staff follow-up</div></div>
-        <div className="ap-stat-card purple"><div className="ap-stat-icon purple">B</div><div className="ap-stat-label">Brands</div><div className="ap-stat-value" style={{ color: "var(--purple)" }}>{new Set(mobileOnly.map((item) => item.brand || "Unknown")).size}</div><div className="ap-stat-sub">Distinct mobile brands</div></div>
+        <div className="ap-stat-card blue">
+          <div className="ap-stat-icon blue">M</div>
+          <div className="ap-stat-label">Mobile Leads</div>
+          <div className="ap-stat-value">{mobileOnly.length}</div>
+          <div className="ap-stat-sub">Smartphone trade-ins in current view</div>
+        </div>
+
+        <div className="ap-stat-card green">
+          <div className="ap-stat-icon green">A</div>
+          <div className="ap-stat-label">Avg Estimate</div>
+          <div className="ap-stat-value" style={{ color: "var(--green)" }}>
+            {fmt(avgEstimate)}
+          </div>
+          <div className="ap-stat-sub">Average expected value</div>
+        </div>
+
+        <div className="ap-stat-card amber">
+          <div className="ap-stat-icon amber">P</div>
+          <div className="ap-stat-label">Pending Requests</div>
+          <div className="ap-stat-value" style={{ color: "var(--amber)" }}>
+            {
+              mobileOnly.filter(
+                (item) => String(item.status || "").toLowerCase() === "pending"
+              ).length
+            }
+          </div>
+          <div className="ap-stat-sub">Awaiting staff follow-up</div>
+        </div>
+
+        <div className="ap-stat-card purple">
+          <div className="ap-stat-icon purple">B</div>
+          <div className="ap-stat-label">Brands</div>
+          <div className="ap-stat-value" style={{ color: "var(--purple)" }}>
+            {new Set(mobileOnly.map((item) => item.brand || "Unknown")).size}
+          </div>
+          <div className="ap-stat-sub">Distinct mobile brands</div>
+        </div>
       </div>
 
       <div className="ap-grid-2">
         <div className="ap-panel">
-          <div className="ap-panel-title">Brand Demand <span className="ap-panel-sub">Saved mobile trade-ins</span></div>
+          <div className="ap-panel-title">
+            Brand Demand <span className="ap-panel-sub">Saved mobile trade-ins</span>
+          </div>
+
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={brandMix.map((item) => ({ name: item.label, value: item.value }))}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -1970,12 +2430,25 @@ function TradeInPanel({ search }) {
             </BarChart>
           </ResponsiveContainer>
         </div>
+
         <div className="ap-panel">
-          <div className="ap-panel-title">Status Breakdown <span className="ap-panel-sub">Trade-in pipeline health</span></div>
+          <div className="ap-panel-title">
+            Status Breakdown <span className="ap-panel-sub">Trade-in pipeline health</span>
+          </div>
+
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
-              <Pie data={statusMix} dataKey="value" nameKey="label" innerRadius={50} outerRadius={80} paddingAngle={2}>
-                {statusMix.map((item) => <Cell key={item.label} fill={item.color} />)}
+              <Pie
+                data={statusMix}
+                dataKey="value"
+                nameKey="label"
+                innerRadius={50}
+                outerRadius={80}
+                paddingAngle={2}
+              >
+                {statusMix.map((item) => (
+                  <Cell key={item.label} fill={item.color} />
+                ))}
               </Pie>
               <Tooltip content={<Tip />} />
               <Legend />
@@ -1985,20 +2458,34 @@ function TradeInPanel({ search }) {
       </div>
 
       <div className="ap-panel" style={{ marginBottom: 16 }}>
-        <div className="ap-panel-title">Estimate Trend <span className="ap-panel-sub">Recent mobile valuation movement</span></div>
+        <div className="ap-panel-title">
+          Estimate Trend <span className="ap-panel-sub">Recent mobile valuation movement</span>
+        </div>
+
         <ResponsiveContainer width="100%" height={220}>
           <AreaChart data={estimateTrend.map((item) => ({ name: item.label, value: item.value }))}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
             <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} />
             <YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} />
             <Tooltip content={<Tip />} />
-            <Area type="monotone" dataKey="value" stroke="#30d158" fill="rgba(48,209,88,0.25)" />
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke="#30d158"
+              fill="rgba(48,209,88,0.25)"
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
       <div className="ap-panel">
-        <div className="ap-panel-title">Mobile Trade-In Requests <span className="ap-panel-sub">{busy ? "Loading..." : `${mobileOnly.length} mobile entries`}</span></div>
+        <div className="ap-panel-title">
+          Mobile Trade-In Requests{" "}
+          <span className="ap-panel-sub">
+            {busy ? "Loading." : `${mobileOnly.length} mobile entries`}
+          </span>
+        </div>
+
         <div className="ap-table-wrap">
           <table className="ap-table">
             <thead>
@@ -2012,31 +2499,65 @@ function TradeInPanel({ search }) {
                 <th>Estimate</th>
                 <th>Status</th>
                 <th>Created</th>
+                <th>Actions</th>
               </tr>
             </thead>
+
             <tbody>
-              {busy && <tr><td colSpan={8} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>Loading trade-in requests...</td></tr>}
-              {!busy && mobileOnly.map((item) => (
-                <tr key={item.id} className="data-row">
-                  <td>{getTradeInCustomerName(item)}</td>
-                  <td>{getTradeInPhone(item)}</td>
-                  <td>{item.brand || "—"}</td>
-                  <td>{getTradeInModel(item)}</td>
-                  <td>{getTradeInImei(item)}</td>
-                  <td>{getTradeInStorage(item)}</td>
-                  <td>{fmt(getTradeInValue(item))}</td>
-                  <td>{item.status || "—"}</td>
-                  <td>{formatDateTime(item.createdAt)}</td>
+              {busy && (
+                <tr>
+                  <td colSpan={10} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
+                    Loading trade-in requests.
+                  </td>
                 </tr>
-              ))}
-              {!busy && mobileOnly.length === 0 && <tr><td colSpan={8} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>No mobile trade-in requests found</td></tr>}
+              )}
+
+              {!busy &&
+                mobileOnly.map((item) => (
+                  <tr key={item.id} className="data-row">
+                    <td>{getTradeInCustomerName(item)}</td>
+                    <td>{getTradeInPhone(item)}</td>
+                    <td>{item.brand || "—"}</td>
+                    <td>{getTradeInModel(item)}</td>
+                    <td>{getTradeInImei(item)}</td>
+                    <td>{getTradeInStorage(item)}</td>
+                    <td>{fmt(getTradeInValue(item))}</td>
+                    <td>{item.status || "Pending"}</td>
+                    <td>{formatDateTime(item.createdAt)}</td>
+                    <td>
+                      <button className="ap-action-btn" onClick={() => setViewItem(item)}>
+                        Read
+                      </button>
+
+                      <button className="ap-action-btn" onClick={() => setEditItem(item)}>
+                        Update
+                      </button>
+
+                      <button className="ap-action-btn del" onClick={() => handleDeleteTrade(item.id)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+              {!busy && mobileOnly.length === 0 && (
+                <tr>
+                  <td colSpan={10} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
+                    No mobile trade-in requests found
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
       <div className="ap-panel" style={{ marginTop: 16 }}>
-        <div className="ap-panel-title">Condition Summary <span className="ap-panel-sub">Submitted exactly from the trade-in form</span></div>
+        <div className="ap-panel-title">
+          Condition Summary{" "}
+          <span className="ap-panel-sub">Submitted exactly from the trade-in form</span>
+        </div>
+
         <div className="ap-table-wrap">
           <table className="ap-table">
             <thead>
@@ -2047,6 +2568,7 @@ function TradeInPanel({ search }) {
                 <th>Notes</th>
               </tr>
             </thead>
+
             <tbody>
               {mobileOnly.map((item) => (
                 <tr key={`${item.id}-condition`} className="data-row">
@@ -2056,15 +2578,193 @@ function TradeInPanel({ search }) {
                   <td>{item.notes || "—"}</td>
                 </tr>
               ))}
-              {mobileOnly.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>No condition details found</td></tr>}
+
+              {mobileOnly.length === 0 && (
+                <tr>
+                  <td colSpan={4} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
+                    No condition details found
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {viewItem && (
+        <TradeInReadModal item={viewItem} onClose={() => setViewItem(null)} />
+      )}
+
+      {editItem && (
+        <TradeInUpdateModal
+          item={editItem}
+          onClose={() => setEditItem(null)}
+          onSave={handleUpdateTrade}
+        />
+      )}
     </>
   );
 }
 
+function TradeInReadModal({ item, onClose }) {
+  return (
+    <div className="ap-modal-overlay" onClick={onClose}>
+      <div className="ap-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+        <div className="ap-modal-header">
+          <div className="ap-modal-title">Mobile Trade-In Details</div>
+          <button className="ap-modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="ap-detail-tiles" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
+          <div className="ap-detail-tile">
+            <div className="ap-detail-tile-label">Customer</div>
+            <div className="ap-detail-tile-val">{getTradeInCustomerName(item)}</div>
+          </div>
+
+          <div className="ap-detail-tile">
+            <div className="ap-detail-tile-label">Phone</div>
+            <div className="ap-detail-tile-val">{getTradeInPhone(item)}</div>
+          </div>
+
+          <div className="ap-detail-tile">
+            <div className="ap-detail-tile-label">Brand</div>
+            <div className="ap-detail-tile-val">{item.brand || "—"}</div>
+          </div>
+
+          <div className="ap-detail-tile">
+            <div className="ap-detail-tile-label">Model</div>
+            <div className="ap-detail-tile-val">{getTradeInModel(item)}</div>
+          </div>
+
+          <div className="ap-detail-tile">
+            <div className="ap-detail-tile-label">IMEI</div>
+            <div className="ap-detail-tile-val">{getTradeInImei(item)}</div>
+          </div>
+
+          <div className="ap-detail-tile">
+            <div className="ap-detail-tile-label">Storage</div>
+            <div className="ap-detail-tile-val">{getTradeInStorage(item)}</div>
+          </div>
+
+          <div className="ap-detail-tile">
+            <div className="ap-detail-tile-label">Estimate</div>
+            <div className="ap-detail-tile-val">{fmt(getTradeInValue(item))}</div>
+          </div>
+
+          <div className="ap-detail-tile">
+            <div className="ap-detail-tile-label">Status</div>
+            <div className="ap-detail-tile-val">{item.status || "Pending"}</div>
+          </div>
+        </div>
+
+        <div className="ap-form-preview">
+          <div className="ap-form-preview-row">
+            <span className="ap-form-preview-key">Condition</span>
+            <span className="ap-form-preview-val">{getTradeInConditionSummary(item)}</span>
+          </div>
+
+          <div className="ap-form-preview-row">
+            <span className="ap-form-preview-key">Notes</span>
+            <span className="ap-form-preview-val">{item.notes || "—"}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TradeInUpdateModal({ item, onClose, onSave }) {
+  const [form, setForm] = useState({
+    customerName: getTradeInCustomerName(item),
+    phone: getTradeInPhone(item),
+    brand: item.brand || "",
+    model: getTradeInModel(item),
+    imei: getTradeInImei(item),
+    storage: getTradeInStorage(item),
+    estimatedValue: getTradeInValue(item),
+    status: item.status || "Pending",
+    notes: item.notes || "",
+  });
+
+  const updateField = (key) => (e) => {
+    setForm((prev) => ({ ...prev, [key]: e.target.value }));
+  };
+
+  return (
+    <div className="ap-modal-overlay" onClick={onClose}>
+      <div className="ap-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+        <div className="ap-modal-header">
+          <div className="ap-modal-title">Update Mobile Trade-In</div>
+          <button className="ap-modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="ap-form-group">
+          <label className="ap-form-label">Customer Name</label>
+          <input className="ap-form-input" value={form.customerName} onChange={updateField("customerName")} />
+        </div>
+
+        <div className="ap-form-group">
+          <label className="ap-form-label">Phone</label>
+          <input className="ap-form-input" value={form.phone} onChange={updateField("phone")} />
+        </div>
+
+        <div className="ap-form-group">
+          <label className="ap-form-label">Brand</label>
+          <input className="ap-form-input" value={form.brand} onChange={updateField("brand")} />
+        </div>
+
+        <div className="ap-form-group">
+          <label className="ap-form-label">Model</label>
+          <input className="ap-form-input" value={form.model} onChange={updateField("model")} />
+        </div>
+
+        <div className="ap-form-group">
+          <label className="ap-form-label">IMEI</label>
+          <input className="ap-form-input" value={form.imei} onChange={updateField("imei")} />
+        </div>
+
+        <div className="ap-form-group">
+          <label className="ap-form-label">Storage</label>
+          <input className="ap-form-input" value={form.storage} onChange={updateField("storage")} />
+        </div>
+
+        <div className="ap-form-group">
+          <label className="ap-form-label">Estimated Value</label>
+          <input
+            className="ap-form-input"
+            type="number"
+            value={form.estimatedValue}
+            onChange={updateField("estimatedValue")}
+          />
+        </div>
+
+        <div className="ap-form-group">
+          <label className="ap-form-label">Status</label>
+          <select className="ap-form-input" value={form.status} onChange={updateField("status")}>
+            <option value="Pending">Pending</option>
+            <option value="Approved">Approved</option>
+            <option value="Rejected">Rejected</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+
+        <div className="ap-form-group">
+          <label className="ap-form-label">Notes</label>
+          <textarea
+            className="ap-form-input"
+            rows="3"
+            value={form.notes}
+            onChange={updateField("notes")}
+          />
+        </div>
+
+        <button className="ap-submit-btn" onClick={() => onSave(item.id, form)}>
+          Save Changes
+        </button>
+      </div>
+    </div>
+  );
+}
 function formatRequestDate(value) {
   const parsed = value?.toDate ? value.toDate() : value ? new Date(value) : null;
   if (!parsed || Number.isNaN(parsed.getTime())) return "Not available";
@@ -2157,6 +2857,13 @@ export default function AdminPanel() {
   const injected = useRef(false);
 
   const liveRecords = records.map(r => ({ ...r, status: getStatus(r.efficiency, thresholds) }));
+  const adminDisplayName = auth.currentUser?.displayName || auth.currentUser?.email || "Admin";
+  const adminInitials = adminDisplayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("") || "A";
 
   useEffect(() => {
     if (injected.current) return; injected.current = true;
@@ -2305,9 +3012,9 @@ export default function AdminPanel() {
           <div className="ap-brand-sub">Admin System</div>
         </div>
         <div className="ap-profile">
-          <div className="ap-avatar">RA</div>
+          <div className="ap-avatar">{adminInitials}</div>
           <div className="ap-profile-info">
-            <div className="ap-profile-name">Root Admin</div>
+            <div className="ap-profile-name">{adminDisplayName}</div>
             <div className="ap-profile-role">Super Administrator</div>
           </div>
           <div className="ap-online-dot" />
@@ -2364,6 +3071,7 @@ export default function AdminPanel() {
                 <AttendancePanel
                   records={liveRecords}
                   setRecords={setRecords}
+                  employees={employeeRequests}
                   onGroup={openGroup}
                   fbAdd={fbAdd}
                   fbUpdate={fbUpdate}
@@ -2444,3 +3152,4 @@ export default function AdminPanel() {
     </div>
   );
 }
+

@@ -30,6 +30,19 @@ import {
 } from "recharts";
 import "./Attendance.css";
 
+function getDaysInMonth(monthValue) {
+  if (!monthValue || !/^\d{4}-\d{2}$/.test(monthValue)) return 0;
+  const [year, month] = monthValue.split("-").map(Number);
+  return new Date(year, month, 0).getDate();
+}
+
+function getEmployeeStaffId(employee, index) {
+  if (!employee) return "";
+  const existing = String(employee.staffId || employee.salaryStaffId || "").trim().toUpperCase();
+  if (/^STF-\d{4}$/.test(existing)) return existing;
+  return `STF-${String(index + 1).padStart(4, "0")}`;
+}
+
 /* ── Group Modal (view-only, no edit) ── */
 function GroupModal({ type, records, onClose, statusColor, fmt, Gauge, Tip }) {
   const list  = records.filter(r => r.status === type).sort((a, b) => b.efficiency - a.efficiency);
@@ -124,8 +137,9 @@ function RecordModal({ record, onClose, statusColor, fmt, Gauge }) {
           <div className="at-detail-grid" style={{ flex: 1 }}>
             {[
               ["Staff ID",    record.staffId],
-              ["Work Hours",  record.hours + "h"],
-              ["Hourly Rate", "Rs " + record.rate],
+              ["Salary Month", record.salaryMonth || "-"],
+              ["Days Present", `${record.daysPresent || 0}/${record.daysInMonth || 0}`],
+              ["Base Salary", "Rs " + record.rate],
               ["Net Payout",  fmt(record.salary)],
               ["Efficiency",  record.efficiency + "%"],
               ["Status",      record.status.toUpperCase()],
@@ -144,26 +158,136 @@ function RecordModal({ record, onClose, statusColor, fmt, Gauge }) {
 }
 
 /* ── Edit / Add Modal ── */
-function EditModal({ record, onClose, onSave, calcEff, getStatus, statusColor, fmt }) {
+function EditModal({ record, employees, onClose, onSave, calcEff, getStatus, statusColor, fmt }) {
+  const employeeOptions = employees
+    .filter((employee) => String(employee.role || "").toLowerCase() === "employee")
+    .sort((a, b) => String(a.fullName || a.email || "").localeCompare(String(b.fullName || b.email || "")))
+    .map((employee, index) => ({
+      ...employee,
+      generatedStaffId: getEmployeeStaffId(employee, index),
+    }));
+
   const [f, setF] = useState({
+    employeeUid: record?.employeeUid || "",
     staffId: record?.staffId || "",
-    hours:   record?.hours   || "",
     rate:    record?.rate    || "",
+    salaryMonth: record?.salaryMonth || "",
+    daysPresent: record?.daysPresent || "",
+    daysInMonth: record?.daysInMonth || "",
   });
-  const h      = parseFloat(f.hours) || 0;
+  const [error, setError] = useState("");
+  const [salaryPreview, setSalaryPreview] = useState(() => Number(record?.salary) || 0);
+  const validateField = (key, value) => {
+    const trimmedValue = String(value || "").trim();
+
+    if (key === "staffId") {
+      if (!trimmedValue) return "Staff ID is required.";
+      if (!/^STF-\d{4}$/i.test(trimmedValue)) return "Incorrect ID input. Staff ID must be in the format STF-xxxx.";
+      return "";
+    }
+
+    if (key === "rate") {
+      if (!trimmedValue) return "Base salary is required.";
+      if (Number.isNaN(Number(trimmedValue))) return "Base salary must be a valid number.";
+      if (Number(trimmedValue) <= 0) return "Base salary must be greater than 0.";
+      return "";
+    }
+
+    if (key === "salaryMonth") {
+      if (!trimmedValue) return "Salary month is required.";
+      return "";
+    }
+
+    if (key === "daysInMonth") {
+      if (!trimmedValue) return "Total month days are required.";
+      if (Number.isNaN(Number(trimmedValue))) return "Total month days must be a valid number.";
+      if (Number(trimmedValue) <= 0 || Number(trimmedValue) > 31) return "Total month days must be between 1 and 31.";
+      return "";
+    }
+
+    if (key === "daysPresent") {
+      if (!trimmedValue) return "Days present is required.";
+      if (Number.isNaN(Number(trimmedValue))) return "Days present must be a valid number.";
+      if (Number(trimmedValue) < 0) return "Days present cannot be less than 0.";
+      if (Number(f.daysInMonth) > 0 && Number(trimmedValue) > Number(f.daysInMonth)) return "Days present cannot be more than total month days.";
+      return "";
+    }
+
+    return "";
+  };
   const r      = parseFloat(f.rate)  || 0;
-  const salary = h * r;
-  const eff    = calcEff(h, r);
+  const presentDays = parseFloat(f.daysPresent) || 0;
+  const totalDays = parseFloat(f.daysInMonth) || 0;
+  const salary = salaryPreview > 0 ? salaryPreview : (r > 0 && totalDays > 0 ? (r / totalDays) * presentDays : 0);
+  const eff    = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
   const status = getStatus(eff);
-  const up     = k => e => setF(p => ({ ...p, [k]: e.target.value }));
+  const selectedEmployee = employeeOptions.find((employee) => employee.uid === f.employeeUid) || null;
+  const up     = k => e => {
+    const nextValue = e.target.value;
+    setF(p => {
+      const next = { ...p, [k]: nextValue };
+      if (k === "salaryMonth") {
+        next.daysInMonth = String(getDaysInMonth(nextValue) || "");
+      }
+      if (k === "employeeUid") {
+        const employee = employeeOptions.find((item) => item.uid === nextValue);
+        if (employee) {
+          next.staffId = employee.generatedStaffId;
+        }
+      }
+      return next;
+    });
+    setError(validateField(k, nextValue));
+  };
+
+  const calculateAttendanceSalary = () => {
+    const monthlySalary = parseFloat(f.rate) || 0;
+    const daysPresent = parseFloat(f.daysPresent) || 0;
+    const daysInMonth = parseFloat(f.daysInMonth) || 0;
+
+    if (!monthlySalary || String(f.daysPresent).trim() === "" || !daysInMonth) {
+      setError("Enter base salary, days present, and total month days before calculating.");
+      return;
+    }
+    if (daysInMonth > 31) {
+      setError("Total month days cannot be more than 31.");
+      return;
+    }
+    if (daysPresent > daysInMonth) {
+      setError("Days present cannot be more than total month days.");
+      return;
+    }
+
+    setError("");
+    setSalaryPreview((monthlySalary / daysInMonth) * daysPresent);
+  };
 
   const save = () => {
-    if (!f.staffId.trim() || !f.hours || !f.rate) return;
+    const staffIdError = validateField("staffId", f.staffId);
+    if (staffIdError) return setError(staffIdError);
+    const rateError = validateField("rate", f.rate);
+    if (rateError) return setError(rateError);
+    const salaryMonthError = validateField("salaryMonth", f.salaryMonth);
+    if (salaryMonthError) return setError(salaryMonthError);
+    const daysInMonthError = validateField("daysInMonth", f.daysInMonth);
+    if (daysInMonthError) return setError(daysInMonthError);
+    const daysPresentError = validateField("daysPresent", f.daysPresent);
+    if (daysPresentError) return setError(daysPresentError);
     onSave({
       ...(record || {}),
       id:         record?.id || Date.now().toString(),
+      employeeUid: f.employeeUid || "",
+      employeeName: selectedEmployee?.fullName || selectedEmployee?.email || "",
       staffId:    f.staffId.trim().toUpperCase(),
-      hours: h, rate: r, salary, efficiency: eff, status,
+      hours: presentDays,
+      rate: r,
+      salary,
+      daysPresent: presentDays,
+      daysInMonth: totalDays,
+      salaryMonth: f.salaryMonth || "",
+      salaryMode: "attendance",
+      efficiency: eff,
+      status,
     });
   };
 
@@ -174,23 +298,55 @@ function EditModal({ record, onClose, onSave, calcEff, getStatus, statusColor, f
           <div className="at-modal-title">{record ? "Edit Record" : "Add Staff"}</div>
           <button className="at-modal-close" onClick={onClose}>×</button>
         </div>
+        {error && <div style={{ color: "#ff453a", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+        <div className="at-form-group">
+          <label className="at-form-label">Employee STF</label>
+          <select className="at-form-input" value={f.employeeUid} onChange={up("employeeUid")}>
+            <option value="">Select employee account</option>
+            {employeeOptions.map((employee) => (
+              <option key={employee.uid} value={employee.uid}>
+                {employee.generatedStaffId} - {employee.fullName || employee.email}
+              </option>
+            ))}
+          </select>
+        </div>
         {[
-          ["staffId", "Staff ID",        "STF-011", "text"],
-          ["hours",   "Work Hours",       "200",     "number"],
-          ["rate",    "Hourly Rate (Rs)", "45",      "number"],
+          ["staffId", "Staff ID",        "STF-0001", "text"],
+          ["rate",    "Base Salary (Rs)", "45000",   "number"],
         ].map(([k, label, ph, type]) => (
           <div key={k} className="at-form-group">
             <label className="at-form-label">{label}</label>
             <input className="at-form-input" type={type}
-              value={f[k]} onChange={up(k)} placeholder={ph} />
+              value={f[k]} onChange={up(k)} placeholder={ph} min={type === "number" ? "0" : undefined} step={k === "hours" || k === "rate" ? "0.01" : undefined} />
           </div>
         ))}
-        {h > 0 && r > 0 && (
+        <div className="at-calc-box">
+          <div className="at-calc-title">Attendance Salary Calculator</div>
+          <div className="at-calc-grid">
+            <div className="at-form-group">
+              <label className="at-form-label">Salary Month</label>
+              <input className="at-form-input" type="month" value={f.salaryMonth} onChange={up("salaryMonth")} />
+            </div>
+            <div className="at-form-group">
+              <label className="at-form-label">Total Days In Month</label>
+              <input className="at-form-input" type="number" min="1" value={f.daysInMonth} onChange={up("daysInMonth")} placeholder="30" />
+            </div>
+            <div className="at-form-group">
+              <label className="at-form-label">Days Present</label>
+              <input className="at-form-input" type="number" min="0" value={f.daysPresent} onChange={up("daysPresent")} placeholder="26" />
+            </div>
+          </div>
+          <button type="button" className="at-calc-btn" onClick={calculateAttendanceSalary}>
+            Calculate Salary
+          </button>
+        </div>
+        {r > 0 && totalDays > 0 && (
           <div className="at-preview">
             {[
               ["Estimated Payout", fmt(salary)],
               ["Efficiency",       eff + "%"],
               ["Status",           status.toUpperCase()],
+              ...(Number(f.daysPresent) > 0 && Number(f.daysInMonth) > 0 ? [["Attendance Basis", `${f.daysPresent}/${f.daysInMonth} days`]] : []),
             ].map(([k, v], i) => (
               <div key={i} className="at-preview-row">
                 <span className="at-preview-key">{k}</span>
@@ -213,6 +369,7 @@ function EditModal({ record, onClose, onSave, calcEff, getStatus, statusColor, f
 ══════════════════════════════════════════════ */
 export default function Attendance({
   records, setRecords,
+  employees = [],
   onGroup,
   fbAdd, fbUpdate, fbDelete,
   /* helpers passed from AdminPanel */
@@ -375,7 +532,7 @@ export default function Attendance({
           <table className="ap-table">
             <thead>
               <tr>
-                <th>Staff ID</th><th>Hours</th><th>Rate</th>
+                <th>Staff ID</th><th>Month</th><th>Attendance</th><th>Base Salary</th>
                 <th>Net Salary</th><th>Efficiency</th><th>Status</th><th>Actions</th>
               </tr>
             </thead>
@@ -385,7 +542,8 @@ export default function Attendance({
                   <tr key={r.id} className="data-row"
                     onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
                     <td style={{ fontFamily:"var(--syne)", fontWeight:600 }}>{r.staffId}</td>
-                    <td>{r.hours}h</td>
+                    <td>{r.salaryMonth || "-"}</td>
+                    <td>{`${r.daysPresent || 0}/${r.daysInMonth || 0}`}</td>
                     <td>Rs {r.rate}</td>
                     <td style={{ fontFamily:"var(--syne)", fontWeight:600 }}>{fmt(r.salary)}</td>
                     <td>
@@ -422,7 +580,7 @@ export default function Attendance({
 
                   {expanded === r.id && (
                     <tr key={r.id + "-x"}>
-                      <td colSpan={7} className="at-expanded-td">
+                      <td colSpan={8} className="at-expanded-td">
                         <div className="at-expanded-inner">
                           <div style={{ display:"flex", flexDirection:"column", alignItems:"center" }}>
                             <Gauge value={r.efficiency} color={statusColor(r.status)} size={90} />
@@ -434,8 +592,9 @@ export default function Attendance({
                           <div className="at-detail-grid">
                             {[
                               ["Staff ID",   r.staffId],
-                              ["Hours",      r.hours + "h"],
-                              ["Rate",       "Rs " + r.rate],
+                              ["Month",      r.salaryMonth || "-"],
+                              ["Attendance", `${r.daysPresent || 0}/${r.daysInMonth || 0}`],
+                              ["Base Salary", "Rs " + r.rate],
                               ["Net Payout", fmt(r.salary)],
                               ["Efficiency", r.efficiency + "%"],
                               ["Status",     r.status.toUpperCase()],
@@ -455,7 +614,7 @@ export default function Attendance({
               ))}
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign:"center", padding:24, color:"var(--muted)" }}>
+                  <td colSpan={8} style={{ textAlign:"center", padding:24, color:"var(--muted)" }}>
                     No records found
                   </td>
                 </tr>
@@ -472,6 +631,7 @@ export default function Attendance({
       )}
       {(editing || adding) && (
         <EditModal record={editing}
+          employees={employees}
           onClose={() => { setEditing(null); setAdding(false); }}
           onSave={save}
           calcEff={calcEff} getStatus={getStatus}

@@ -1,7 +1,7 @@
 .cart-page {
   min-height: 100vh;
   background: #f4f6f8;
-  padding: 34px 30px 70px;
+  padding: 150px 30px 70px; 
 }
 
 .cart-hero {
@@ -9,7 +9,7 @@
   margin: 0 auto 28px;
   padding: 38px 40px;
   border-radius: 32px;
-  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 55%, #e0f2fe 145%);
+  background: #000000;
   color: #ffffff;
   display: grid;
   grid-template-columns: 1.5fr 0.75fr;
@@ -19,24 +19,72 @@
 
 .cart-kicker {
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: 14px !important;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  font-weight: 700;
+  font-weight: 500;
   opacity: 0.8;
+  margin-bottom: 15px !important;
+}
+
+.cart-kicker-a {
+  margin: 0 0 10px;
+  font-size: 14px !important;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+  opacity: 0.8;
+  margin-bottom: 20px !important;
+}
+
+.cart-kicker-b {
+  margin: 0 0 10px;
+  font-size: 14px !important;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+  opacity: 0.8;
+  margin-bottom: 20px !important;
 }
 
 .cart-hero h1 {
   margin: 0 0 12px;
-  font-size: 50px;
+  font-size: 35px;
   line-height: 1.04;
+  background: linear-gradient(90deg, #6a5cff 0%, #8b5cf6 40%, #d946ef 75%, #ff4fd8 100%);
+  background-size: 200% auto;
+
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
 }
 
-.cart-hero p {
-  margin: 0;
-  font-size: 18px;
+.cart-hero h1,
+.gradient-text-z {
+  margin: 0 0 12px;
+  font-size: 35px;
+  line-height: 1.04;
+  background: linear-gradient(
+    90deg,
+    #8e72ff 0% ,
+    #a855f7 58%,
+    #ec4fd8 100%
+  ); 
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  display: inline-block;
+  width: fit-content;
+}
+
+.gradient {
+  font-size: 1.00rem;
+  color: rgba(255, 255, 255, 0.683);
+  margin-bottom: 1.5rem;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap; 
 }
 
 .cart-hero-total {
@@ -74,7 +122,7 @@
 .cart-summary-card {
   background: #ffffff;
   border-radius: 28px;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.121);
 }
 
 .cart-items-panel {
@@ -93,7 +141,7 @@
 .cart-summary-card h2 {
   margin: 0;
   font-size: 28px;
-  color: #111827;
+  color: #000000a8;
 }
 
 .cart-clear-btn,
@@ -108,21 +156,43 @@
 .cart-empty-state {
   padding: 40px 18px;
   border-radius: 22px;
-  background: #f8fafc;
+  background: #f2f7fc;
   text-align: center;
 }
 
 .cart-empty-state h3 {
   margin: 0 0 10px;
-  font-size: 26px;
+  font-size: 16px;
+  color: #000000b7;
 }
 
 .cart-empty-state p {
   margin: 0 0 20px;
+  font-size: 14px !important;
   color: #64748b;
 }
 
-.cart-shop-btn,
+.empty-cart-icon {
+  width: 70px;
+  height: 70px;
+  color: #d1d5db;
+  margin-bottom: 18px;
+  stroke-width: 1.7;
+}
+
+.cart-shop-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  font-size: 15px !important;
+}
+
 .cart-buy-btn {
   display: inline-flex;
   align-items: center;
@@ -137,8 +207,14 @@
 
 .cart-shop-btn {
   padding: 0 24px;
-  background: #111827;
+  background: #0071e3;
   color: #ffffff;
+  transition: all 0.3s ease;
+}
+
+.cart-shop-btn:hover {
+  background: #000000;
+  color: white;
 }
 
 .cart-items-list {
@@ -152,7 +228,7 @@
   gap: 18px;
   padding: 18px;
   border-radius: 22px;
-  background: #f8fafc;
+  background: #f2f7fc;
   align-items: center;
 }
 
@@ -172,8 +248,12 @@
 .cart-item-info h3 {
   margin: 0 0 8px;
   font-size: 22px;
+  color: #000000b7;
 }
 
+.cartItemright {
+  color: #000000b7;
+}
 .cart-item-info p {
   margin: 0;
   color: #2563eb;
@@ -217,6 +297,9 @@
   margin: 10px 0 18px;
   color: #64748b;
   line-height: 1.6;
+  font-size: 14px !important;
+  margin-bottom: 24px !important;
+  margin-top: 5px !important;
 }
 
 .cart-summary-rows {
@@ -256,11 +339,22 @@
 }
 
 .cart-buy-btn {
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   margin-top: 6px;
   width: 100%;
-  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
+  background: #0071e3;
   color: #ffffff;
-  box-shadow: 0 16px 34px rgba(29, 78, 216, 0.25);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cart-buy-btn:hover {
+  background: #000000;
+  color: white;
 }
 
 .cart-buy-btn:disabled {

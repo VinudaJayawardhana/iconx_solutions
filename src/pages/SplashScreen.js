@@ -6,9 +6,9 @@ export default function SplashScreen() {
   const navigate  = useNavigate();
   const canvasRef = useRef(null);
 
-  /* ── Auto-redirect to /login after 4s ── */
+  /* ── Auto-redirect to /home after 4s ── */
   useEffect(() => {
-    const t = setTimeout(() => navigate("/login", { replace: true }), 4000);
+    const t = setTimeout(() => navigate("/home", { replace: true }), 4000);
     return () => clearTimeout(t);
   }, [navigate]);
 

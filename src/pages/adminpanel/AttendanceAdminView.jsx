@@ -9,6 +9,26 @@ import {
   todayKey,
 } from "./attendanceShared";
 
+function validateAttendanceForm(form) {
+  if (!form.employeeUid) return "Employee is required.";
+  if (!form.date) return "Date is required.";
+
+  const salesValues = Object.values(form.salesByCategory || {});
+  if (salesValues.some((value) => Number.isNaN(Number(value)) || Number(value) < 0)) {
+    return "Sales by category must be valid non-negative numbers.";
+  }
+
+  if ((form.checkIn && !form.checkOut) || (!form.checkIn && form.checkOut)) {
+    return "Both check-in and check-out times are required together.";
+  }
+
+  if (form.checkIn && form.checkOut && form.checkOut <= form.checkIn) {
+    return "Check-out time must be later than check-in time.";
+  }
+
+  return "";
+}
+
 function createAdminForm(record) {
   return {
     id: record?.id,
@@ -143,6 +163,7 @@ export default function AttendanceAdminView({ employees, attendanceRecords, onSa
   const [editingForm, setEditingForm] = useState(null);
   const [detailRecord, setDetailRecord] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const filteredRecords = useMemo(
     () => attendanceRecords.filter((record) => {
@@ -155,10 +176,16 @@ export default function AttendanceAdminView({ employees, attendanceRecords, onSa
 
   const submit = async (event) => {
     event.preventDefault();
+    const validationMessage = validateAttendanceForm(editingForm);
+    if (validationMessage) {
+      setFormError(validationMessage);
+      return;
+    }
     setSaving(true);
     try {
       await onSave(editingForm);
       setEditingForm(null);
+      setFormError("");
     } catch (error) {
       console.error("Admin attendance save failed:", error);
     } finally {
@@ -187,7 +214,10 @@ export default function AttendanceAdminView({ employees, attendanceRecords, onSa
         </div>
         <div className="employee-admin-toolbar">
           <input className="employee-admin-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search employee attendance..." />
-          <button type="button" className="employee-admin-primary" onClick={() => setEditingForm(createAdminForm())}>Add Attendance</button>
+          <button type="button" className="employee-admin-primary" onClick={() => {
+            setFormError("");
+            setEditingForm(createAdminForm());
+          }}>Add Attendance</button>
         </div>
       </header>
 
@@ -248,7 +278,10 @@ export default function AttendanceAdminView({ employees, attendanceRecords, onSa
                   <td>
                     <div className="employee-admin-action-row">
                       <button type="button" className="employee-admin-secondary" onClick={() => setDetailRecord(record)}>View</button>
-                      <button type="button" className="employee-admin-secondary" onClick={() => setEditingForm(createAdminForm(record))}>Edit</button>
+                      <button type="button" className="employee-admin-secondary" onClick={() => {
+                        setFormError("");
+                        setEditingForm(createAdminForm(record));
+                      }}>Edit</button>
                       <button type="button" className="employee-admin-secondary employee-admin-danger" onClick={() => remove(record.id)} disabled={saving}>Delete</button>
                     </div>
                   </td>
@@ -259,7 +292,23 @@ export default function AttendanceAdminView({ employees, attendanceRecords, onSa
         </div>
       </section>
 
-      {editingForm && <AttendanceRecordModal employees={employees} form={editingForm} setForm={setEditingForm} onClose={() => setEditingForm(null)} onSubmit={submit} saving={saving} />}
+      {editingForm && (
+        <AttendanceRecordModal
+          employees={employees}
+          form={editingForm}
+          setForm={(value) => {
+            setFormError("");
+            setEditingForm(value);
+          }}
+          onClose={() => {
+            setFormError("");
+            setEditingForm(null);
+          }}
+          onSubmit={submit}
+          saving={saving}
+        />
+      )}
+      {editingForm && formError && <div className="employee-admin-message">{formError}</div>}
       {detailRecord && <AttendanceDetailModal record={detailRecord} onClose={() => setDetailRecord(null)} />}
     </>
   );

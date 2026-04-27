@@ -87,6 +87,11 @@ export default function Signup() {
   }, [form.email, form.password, form.confirmPassword]);
 
   const up = k => e => { setForm(p => ({ ...p, [k]: e.target.value })); setError(''); };
+  const upPhone = e => {
+    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setForm(p => ({ ...p, phone: digitsOnly }));
+    setError('');
+  };
   const strength    = pwStrength(form.password);
   const progressPct = step === 1 ? 33 : step === 2 ? 66 : 100;
 
@@ -96,6 +101,7 @@ export default function Signup() {
     if (!form.lastName.trim())                  return 'Last name is required.';
     if (!form.email.trim())                     return 'Email address is required.';
     if (!/\S+@\S+\.\S+/.test(form.email))       return 'Enter a valid email address.';
+    if (form.phone && form.phone.length !== 10) return 'Contact number must be exactly 10 digits.';
     if (form.password.length < 6)               return 'Password must be at least 6 characters.';
     if (form.role === 'admin' && !isStrongAdminPassword(form.password)) {
       return 'Admin password must be at least 12 characters and include uppercase, lowercase, number, and special character.';
@@ -353,9 +359,11 @@ export default function Signup() {
                     <span className="sp-input-icon"><Icon.phone /></span>
                     <input
                       className="sp-input"
-                      type="tel" placeholder="+94 77 123 4567"
-                      value={form.phone} onChange={up('phone')}
+                      type="tel" placeholder="0771234567"
+                      value={form.phone} onChange={upPhone}
                       autoComplete="tel"
+                      inputMode="numeric"
+                      maxLength={10}
                     />
                   </div>
                 </div>

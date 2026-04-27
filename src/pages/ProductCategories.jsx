@@ -48,6 +48,10 @@ const ProductCategories = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
+  useEffect(() => {
     let timer;
 
     const start = () => {

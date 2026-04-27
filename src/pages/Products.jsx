@@ -6,6 +6,8 @@ import { db } from "../firebase";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import "./Products.css";
 import { addItemToCart } from "../utils/cart";
+import kokoLogo from "../images/koko.png";
+
 
 const MIN_PRICE = 0;
 const MAX_PRICE = 500000;
@@ -18,23 +20,12 @@ const SEGMENT_FILTERS = {
   },
   android: {
     title: "Android Collection",
-    brands: [
-      "Samsung",
-      "Google",
-      "Pixel",
-      "Xiaomi",
-      "Redmi",
-      "OnePlus",
-      "Nothing",
-      "Oppo",
-      "Vivo",
-      "Huawei",
-    ],
+    brands: ["Android", "Samsung", "Google Pixel", "Xiaomi", "Redmi", "OnePlus", "Nothing", "Oppo", "Vivo", "Huawei", "Samsung Galaxy"],
     categories: [],
   },
   audio: {
     title: "Audio & Speakers",
-    brands: [],
+    brands: ["JBL Partybox", "Sony", "Bose", "Beats", "Sennheiser", "Audio-Technica", "Bang & Olufsen", "Marshall"],
     categories: ["Audio", "Speaker", "Speakers", "Earbuds", "Headphones", "AirPods"],
   },
   accessories: {
@@ -79,7 +70,6 @@ const Products = () => {
 
   useEffect(() => {
     const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const productsData = snapshot.docs.map((docItem) => ({
         id: docItem.id,
@@ -116,7 +106,6 @@ const Products = () => {
 
     const toastId = Date.now();
     setToasts((previous) => [...previous, { id: toastId, name: product.name }]);
-
     setTimeout(() => {
       setToasts((previous) => previous.filter((toast) => toast.id !== toastId));
     }, 3000);
@@ -128,18 +117,20 @@ const Products = () => {
   }, [navigate]);
 
   const handleImageError = useCallback((productId) => {
-    setBrokenImages((previous) =>
+    setBrokenImages((previous) => (
       previous[productId] ? previous : { ...previous, [productId]: true }
-    );
+    ));
   }, []);
 
-  const availableBrands = [...new Set(
-    products.map((product) => product.brands).filter(Boolean)
-  )].sort((a, b) => a.localeCompare(b));
+  const availableBrands = [...new Set(products
+    .map((product) => product.brands)
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
 
-  const availableCategories = [...new Set(
-    products.map((product) => product.category).filter(Boolean)
-  )].sort((a, b) => a.localeCompare(b));
+  const availableCategories = [...new Set(products
+    .map((product) => product.category)
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
 
   const activeSegment = SEGMENT_FILTERS[searchParams.get("segment")] || null;
   const minPercent = ((minVal - MIN_PRICE) / (MAX_PRICE - MIN_PRICE)) * 100;
@@ -305,62 +296,73 @@ const Products = () => {
 
           <div className="products-page-intro">
             <div>
-              <p className="products-page-kicker">Filtered Product View</p>
+              <p className="cart-kicker">Filtered Product View</p>
               <h1>{activeSegment?.title || "Browse all products"}</h1>
-              <p>
+              <p className="gradient">
                 Refine by live brand and category data, or return to the category slider
                 for a faster collection-first experience.
               </p>
             </div>
-            <Link className="products-view-all-link" to="/products/list">
-              Reset to all products
-            </Link>
+            
           </div>
 
           <div className="products-grid-custom">
             {filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => {
-                const imageSrc = product.image || product.imageUrl || "";
-
-                return (
-                  <div key={product.id} className="grid-product-card">
-                    <div className="grid-product-image">
-                      {imageSrc && !brokenImages[product.id] ? (
-                        <img
-                          src={imageSrc}
-                          alt={product.name}
-                          loading="lazy"
-                          onError={() => handleImageError(product.id)}
-                        />
-                      ) : (
-                        <div className="grid-product-image-fallback">
-                          <span>📷 No Image</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <span className="grid-product-brand">{product.brands || "iconX"}</span>
-                    <h4>{product.name}</h4>
-                    <p className="grid-product-category">{product.category || "Collection item"}</p>
-                    <p className="product-price">{product.price?.toLocaleString()} LKR</p>
-
-                    <div className="product-card-actions">
-                      <button
-                        className="add-to-cart-btn"
-                        onClick={() => handleAddToCart(product)}
-                      >
-                        Add to Cart
-                      </button>
-                      <button
-                        className="buy-now-btn"
-                        onClick={() => handleBuyNow(product)}
-                      >
-                        Buy Now
-                      </button>
-                    </div>
+              filteredProducts.map((product) => (
+                <div key={product.id} className="grid-product-card">
+                  <div className="grid-product-image">
+                    {product.image && !brokenImages[product.id] ? (
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        loading="lazy"           
+                        onError={() => handleImageError(product.id)}
+                      />
+                    ) : (
+                      <div className="grid-product-image-fallback">
+                        <span>📷 No Image</span>
+                      </div>
+                    )}
                   </div>
-                );
-              })
+                  <div className="product-color-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+
+                  <h4>{product.name}</h4>
+
+                  <p className="grid-product-category">
+                    {product.category || "Collection item"}
+                  </p>
+
+                  <p className="product-price">
+                    රු{product.price?.toLocaleString()}
+                  </p>
+
+                  <p className="product-installment">
+                    or 3 x රු{(Number(product.price || 0) / 3).toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })} with 
+                    <img src={kokoLogo} alt="koko" className="koko-logo" />
+                  </p>
+                  <div className="product-card-actions">
+                    <button
+                      className="add-to-cart-btn"
+                      onClick={() => handleAddToCart(product)}
+                    >
+                      Add to Cart
+                    </button>
+                    <button
+                      className="buy-now-btn"
+                      onClick={() => handleBuyNow(product)}
+                    >
+                      Buy Now
+                    </button>
+                  </div>
+                </div>
+              ))
             ) : (
               <p className="no-results">
                 No products matched this collection yet. Try clearing a filter or browsing a different category.

@@ -52,6 +52,7 @@ const EMPTY_FORM = {
 };
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const IMAGE_URL_REGEX = /^https?:\/\/.+/i;
 
 const getUploadErrorMessage = (err) => {
   const message = err?.message || "";
@@ -386,6 +387,15 @@ function ProductForm({ existing, onBack }) {
     if (!form.category.trim()) return setError("Category is required.");
     if (!form.price) return setError("Price is required.");
     if (!form.stock_in) return setError("Stock count is required.");
+    if (Number.isNaN(Number(form.price)) || Number(form.price) < 0) {
+      return setError("Price must be a valid non-negative number.");
+    }
+    if (!Number.isInteger(Number(form.stock_in)) || Number(form.stock_in) < 0) {
+      return setError("Stock count must be a valid non-negative whole number.");
+    }
+    if (imageUrlInput.trim() && !IMAGE_URL_REGEX.test(imageUrlInput.trim())) {
+      return setError("Please enter a valid image URL.");
+    }
 
     if (!existing && !imageFile && !imageUrlInput.trim()) {
       return setError(
