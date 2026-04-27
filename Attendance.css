@@ -1,0 +1,331 @@
+/* ═══════════════════════════════════════════════════
+   ATTENDANCE MANAGEMENT — CSS
+   Uses AdminPanel CSS variables (--bg, --surface, etc.)
+   Must be loaded AFTER AdminPanel styles are injected.
+═══════════════════════════════════════════════════ */
+
+/* ── Stat cards ── */
+.at-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  
+  /* ── Charts row ── */
+  .at-chart-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  
+  /* ── Filter bar ── */
+  .at-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  
+  /* ── Syncing toast ── */
+  .at-sync-toast {
+    position: fixed;
+    top: 16px; right: 24px;
+    background: var(--accent);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(10,132,255,0.4);
+    animation: atToastIn 0.25s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes atToastIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .at-spin {
+    animation: atSpin 1s linear infinite;
+  }
+  @keyframes atSpin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  
+  /* ── Table panel ── */
+  .at-table-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  
+  /* ── Efficiency bar in table ── */
+  .at-eff-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .at-eff-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--surface2);
+    overflow: hidden;
+    width: 80px;
+    flex-shrink: 0;
+  }
+  .at-eff-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s;
+  }
+  .at-eff-text {
+    font-family: var(--syne);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  
+  /* ── Expanded row ── */
+  .at-expanded-td {
+    background: var(--surface2) !important;
+    padding: 16px 20px !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+  .at-expanded-inner {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  
+  /* ── Detail tile grid in expanded row ── */
+  .at-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    flex: 1;
+  }
+  .at-detail-tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .at-detail-tile-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .at-detail-tile-val {
+    font-family: var(--syne);
+    font-size: 16px;
+    font-weight: 600;
+  }
+  
+  /* ── Modal ── */
+  .at-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+    animation: atFadeIn 0.15s ease;
+  }
+  @keyframes atFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .at-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    width: 90vw;
+    max-width: 440px;
+    max-height: 85vh;
+    overflow-y: auto;
+    animation: atSlideUp 0.2s ease;
+  }
+  .at-modal::-webkit-scrollbar { width: 4px; }
+  .at-modal::-webkit-scrollbar-thumb { background: var(--border); }
+  @keyframes atSlideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .at-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .at-modal-title {
+    font-family: var(--syne);
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .at-modal-close {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 18px;
+    transition: all 0.15s;
+  }
+  .at-modal-close:hover {
+    background: rgba(255,69,58,0.15);
+    color: var(--red);
+    border-color: var(--red);
+  }
+  
+  /* ── Form inside modal ── */
+  .at-form-group { margin-bottom: 16px; }
+  .at-form-label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .at-form-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--dm);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .at-form-input:focus { border-color: var(--accent); }
+  
+  /* ── Preview box in modal ── */
+  .at-preview {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 14px;
+  }
+  .at-preview-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .at-preview-row:last-child { margin-bottom: 0; }
+  .at-preview-key { font-size: 12px; color: var(--muted); }
+  .at-preview-val {
+    font-family: var(--syne);
+    font-weight: 600;
+    font-size: 14px;
+  }
+  
+  /* ── Record view modal ── */
+  .at-record-gaugerow {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .at-record-hint {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    padding-top: 12px;
+  }
+  
+  /* ── Submit button ── */
+  .at-submit-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: var(--syne);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    margin-top: 8px;
+  }
+  .at-submit-btn:hover { opacity: 0.85; }
+  
+  /* ── Group modal ── */
+  .at-group-modal { max-width: 660px; }
+  .at-group-list {
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .at-group-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .at-group-rank {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--syne);
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .at-group-info { flex: 1; min-width: 0; }
+  .at-group-id {
+    font-family: var(--syne);
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .at-group-meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .at-group-eff {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .at-group-eff-val {
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .at-group-eff-bar {
+    width: 60px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .at-group-eff-fill {
+    height: 100%;
+    border-radius: 2px;
+  }
