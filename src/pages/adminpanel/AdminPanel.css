@@ -299,3 +299,20 @@
   }
   .connection-tag.online { background: rgba(48, 209, 88, 0.12); color: var(--success); }
   .connection-tag.offline { background: rgba(255, 69, 58, 0.12); color: var(--critical); }
+
+
+
+  .ap-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.ap-table {
+  min-width: 1450px;
+}
+
+.ap-table th:last-child,
+.ap-table td:last-child {
+  min-width: 230px;
+  white-space: nowrap;
+}

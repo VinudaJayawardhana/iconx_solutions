@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
 import { 
   getFirestore, collection, addDoc, getDocs, 
@@ -20,14 +21,16 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+export const functions = getFunctions(app, "us-central1");
 
 // CRUD: Create (Add Attendance)
-export const addAttendanceRecord = async (empId, hours, rate) => {
+export const addAttendanceRecord = async (empId, hours, rate, extraFields = {}) => {
   return await addDoc(collection(db, "attendance"), {
     emp_id: empId,
     work_hour: Number(hours),
     base_salary_rate: Number(rate),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    ...extraFields,
   });
 };
 

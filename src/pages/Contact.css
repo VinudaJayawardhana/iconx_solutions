@@ -420,8 +420,8 @@
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  background-color: #000000;
-  border: 2px solid #0000008c;
+  background-color: #0071e3;
+  border: 2px solid #0071e3;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
@@ -433,6 +433,13 @@
   margin-top: 20px !important;
 }
 
+.btn-submit:hover {
+  background-color: #000000;
+  color: #ffffff;
+  transform: translateY(-2px);
+  border: 2px solid #000000;
+  box-shadow: 0 12px 24px rgba(255, 255, 255, 0.993);
+}
 .btn-submit::before {
   content: "";
   position: absolute;
@@ -819,7 +826,6 @@
   margin-bottom: 1.8rem;
 }
 
-/*TESTIMONIALS*/
 .testimonials-section {
   padding-top: 80px !important;
   margin-top: 0 !important;

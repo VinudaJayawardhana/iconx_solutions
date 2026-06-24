@@ -78,15 +78,100 @@ const ContactForm = () => {
     subject: "",
     message: "",
   });
+
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const blockExtraDigits = (e, value, maxLength) => {
+    const allowedKeys = [
+      "Backspace",
+      "Delete",
+      "ArrowLeft",
+      "ArrowRight",
+      "ArrowUp",
+      "ArrowDown",
+      "Tab",
+      "Home",
+      "End",
+    ];
+
+    if (allowedKeys.includes(e.key) || e.ctrlKey || e.metaKey) return;
+
+    if (!/^[0-9]$/.test(e.key)) {
+      e.preventDefault();
+      return;
+    }
+
+    if (value.length >= maxLength) {
+      e.preventDefault();
+    }
+  };
+
+  const validateForm = () => {
+    const nameRegex = /^[A-Za-z\s]+$/;
+
+    if (!form.name.trim()) {
+      return "Full name is required.";
+    }
+
+    if (!nameRegex.test(form.name.trim())) {
+      return "Full name should contain only letters.";
+    }
+
+    if (!form.phone.trim()) {
+      return "Phone number is required.";
+    }
+
+    if (!/^\d{10}$/.test(form.phone)) {
+      return "Phone number must be exactly 10 digits.";
+    }
+
+    if (!(form.phone.startsWith("07") || form.phone.startsWith("94"))) {
+      return "Phone number must start with 07 or 94.";
+    }
+
+    if (!form.subject.trim()) {
+      return "Subject is required.";
+    }
+
+    if (form.subject.trim().length < 3) {
+      return "Subject must be at least 3 characters long.";
+    }
+
+    if (!form.message.trim()) {
+      return "Message is required.";
+    }
+
+    if (form.message.trim().length < 10) {
+      return "Message must be at least 10 characters long.";
+    }
+
+    return "";
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    if (name === "phone") {
+      const onlyNumbers = value.replace(/\D/g, "").slice(0, 10);
+      setForm({ ...form, phone: onlyNumbers });
+      return;
+    }
+
+    setForm({ ...form, [name]: value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const validationError = validateForm();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -153,9 +238,21 @@ const ContactForm = () => {
           <input
             id="phone"
             name="phone"
-            type="tel"
+            type="text"
+            inputMode="numeric"
+            maxLength={10}
             placeholder="077 XXX XXXX"
             value={form.phone}
+            onKeyDown={(e) => blockExtraDigits(e, form.phone, 10)}
+            onPaste={(e) => {
+              e.preventDefault();
+              const pasted = e.clipboardData
+                .getData("text")
+                .replace(/\D/g, "")
+                .slice(0, 10);
+
+              setForm({ ...form, phone: pasted });
+            }}
             onChange={handleChange}
             required
           />

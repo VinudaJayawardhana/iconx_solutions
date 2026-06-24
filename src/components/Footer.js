@@ -21,9 +21,7 @@ const Footer = () => {
         </div>
 
         <p className="footer-description">
-          A trusted mobile store offering the latest smartphones, accessories,
-          and reliable after-sales support. We serve our customers with
-          transparency, expertise, and care.
+          Experience the future of mobile technology with IconX. From flagship smartphones to essential accessories. We combine quality products & exceptional service to deliver an outstanding customer experience.
         </p>
 
         <p className="footer-social-label">Follow us</p>
@@ -81,7 +79,7 @@ const Footer = () => {
                 <polyline points="22,6 12,13 2,6"/>
               </svg>
             </span>
-            <a href="mailto:info@iconx.lk">Info@Iconx.lk</a>
+            <a href="mailto:info@iconx.lk">Info@Iconx.LK</a>
           </div>
 
           <div className="footer-contact-item">

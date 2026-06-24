@@ -9,6 +9,25 @@ import {
   todayKey,
 } from "./attendanceShared";
 
+function validateAttendanceForm(form) {
+  if (!form.date) return "Date is required.";
+
+  const salesValues = Object.values(form.salesByCategory || {});
+  if (salesValues.some((value) => Number.isNaN(Number(value)) || Number(value) < 0)) {
+    return "Sales by category must be valid non-negative numbers.";
+  }
+
+  if ((form.checkIn && !form.checkOut) || (!form.checkIn && form.checkOut)) {
+    return "Both check-in and check-out times are required together.";
+  }
+
+  if (form.checkIn && form.checkOut && form.checkOut <= form.checkIn) {
+    return "Check-out time must be later than check-in time.";
+  }
+
+  return "";
+}
+
 function buildMonthDays(monthAnchor) {
   const year = monthAnchor.getFullYear();
   const month = monthAnchor.getMonth();
@@ -74,6 +93,11 @@ export default function AttendanceEmployeeView({ currentEmployee, attendanceReco
 
   const submit = async (event) => {
     event.preventDefault();
+    const validationMessage = validateAttendanceForm(form);
+    if (validationMessage) {
+      setMessage(validationMessage);
+      return;
+    }
     setSaving(true);
     setMessage("");
 

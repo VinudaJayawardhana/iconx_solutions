@@ -189,8 +189,7 @@ export default function TradeInPage() {
             <div className="offer-card">
               <div>
                 <h2 className="offer-title">
-                  Get <strong>$35–$685</strong> when you <br />
-                  trade in an <strong>iPhone</strong>.
+                  Get offers up to <strong>Rs.65,000</strong>
                 </h2>
                 <table className="offer-list">
                   <thead>
@@ -205,25 +204,25 @@ export default function TradeInPage() {
                     <tr>
                       <td>iPhone 16 Pro Max</td>
                       <td style={{ textAlign: "right", fontWeight: 700 }}>
-                        Up to $685
+                        Up to Rs.65,000
                       </td>
                     </tr>
                     <tr>
                       <td>iPhone 16 Pro</td>
                       <td style={{ textAlign: "right", fontWeight: 700 }}>
-                        Up to $550
+                        Up to Rs.50,000
                       </td>
                     </tr>
                     <tr>
                       <td>iPhone 16 Plus</td>
                       <td style={{ textAlign: "right", fontWeight: 700 }}>
-                        Up to $455
+                        Up to Rs.45,000
                       </td>
                     </tr>
                     <tr>
                       <td>iPhone 16</td>
                       <td style={{ textAlign: "right", fontWeight: 700 }}>
-                        Up to $435
+                        Up to Rs.43,500
                       </td>
                     </tr>
                   </tbody>
@@ -232,7 +231,7 @@ export default function TradeInPage() {
                   className="trade-primary-btn big-btn"
                   onClick={() => setShowModal(true)}
                 >
-                  Find your trade-in value
+                  Check Switch Value 
                 </button>
               </div>
               <div className="offer-image">
@@ -255,7 +254,12 @@ export default function TradeInPage() {
                 <div className="arrival-promo-content">
                   <p className="arrival-small-text">iPhone 17 Series</p>
                   <h3>Discover the latest arrivals.</h3>
-                  <button className="arrival-shop-btn">Shop Now</button>
+                  <button 
+                  type = "button"
+                  className="arrival-shop-btn"
+                  onClick={() => navigate("/apple")}>
+                    Shop Now
+                  </button>
                 </div>
                 <div className="arrival-promo-image">
                   <img src={Serie} alt="iPhone 17 Series" />
@@ -310,7 +314,12 @@ export default function TradeInPage() {
                 <div className="arrival-promo-content">
                   <p className="arrival-small-text">Mac Series</p>
                   <h3>Discover the latest arrivals.</h3>
-                  <button className="arrival-shop-btn">Shop Now</button>
+                  <button 
+                  type = "button"
+                  className="arrival-shop-btn"
+                  onClick={() => navigate("/apple")}>
+                    Shop Now
+                  </button>
                 </div>
                 <div className="arrival-promo-image">
                   <img src={macBook} alt="Mac Series" />
@@ -335,10 +344,18 @@ export default function TradeInPage() {
                 </p>
 
                 <div className="accessories-banner-buttons">
-                  <button className="accessory-pill-btn">Watches</button>
-                  <button className="accessory-pill-btn">AirPods</button>
-                  <button className="accessory-pill-btn">Airtags</button>
-                  <button className="accessory-pill-btn">Cases</button>
+                  <button className="accessory-pill-btn" onClick={() => navigate("/accessories")}>
+                    Watches
+                  </button>
+                  <button className="accessory-pill-btn" onClick={() => navigate("/accessories")}>
+                    AirPods
+                  </button>
+                  <button className="accessory-pill-btn" onClick={() => navigate("/accessories")}>
+                    Airtags
+                  </button>
+                  <button className="accessory-pill-btn" onClick={() => navigate("/accessories")}>
+                    Cases
+                  </button>
                 </div>
               </div>
             </div>
@@ -351,8 +368,8 @@ export default function TradeInPage() {
               <div className="hover-card">
                 <img src={service} alt="Service Center" />
                 <div className="hover-card-content">
-                  <h3>Service Center</h3>
-                  <button>Book Service</button>
+                  <h3>Accessories</h3>
+                  <button onClick={() => navigate("/accessories")}>Explore</button>
                 </div>
               </div>
             </FadeUp>
@@ -362,7 +379,7 @@ export default function TradeInPage() {
                 <img src={jbl} alt="Speakers" />
                 <div className="hover-card-content">
                   <h3>Speakers</h3>
-                  <button>Explore</button>
+                  <button onClick={() => navigate("/products/list")}>Explore</button>
                 </div>
               </div>
             </FadeUp>
@@ -372,7 +389,7 @@ export default function TradeInPage() {
                 <img src={icon} alt="Our Stores" />
                 <div className="hover-card-content">
                   <h3>About us</h3>
-                  <button>Find Store</button>
+                  <button onClick={() => navigate("/about")}>Find Store</button>
                 </div>
               </div>
             </FadeUp>
@@ -392,7 +409,7 @@ export default function TradeInPage() {
               </div>
 
               <div className="modal-body">
-                <h2>Select your device to get a trade-in estimate.</h2>
+                <h2>Select your device type</h2>
 
                 <div
                   className="device-option"
@@ -404,21 +421,21 @@ export default function TradeInPage() {
                   <div className="device-left">
                     <span className="device-name">Smartphone</span>
                   </div>
-                  <span className="device-up-to">Up to $685</span>
+                  <span className="device-up-to">Up to Rs.65,000</span>
                 </div>
 
                 <div className="device-option">
                   <div className="device-left">
                     <span className="device-name">Tablet</span>
                   </div>
-                  <span className="device-up-to">Up to $670</span>
+                  <span className="device-up-to">Up to Rs.67,000</span>
                 </div>
 
                 <div className="device-option">
                   <div className="device-left">
                     <span className="device-name">Computer</span>
                   </div>
-                  <span className="device-up-to">Up to $2090</span>
+                  <span className="device-up-to">Up to Rs.20,900</span>
                 </div>
               </div>
             </div>

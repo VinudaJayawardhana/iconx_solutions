@@ -13,6 +13,7 @@ import {
   updateCartItemQuantity,
 } from "../utils/cart";
 import "./CartPage.css";
+import { ShoppingCart } from "lucide-react";
 
 function formatLkr(value) {
   return new Intl.NumberFormat("en-LK", {
@@ -63,15 +64,58 @@ export default function CartPage() {
     setCartItems(getCartItems());
   };
 
+  const validateCustomerDetails = () => {
+    const nameRegex = /^[A-Za-z\s]+$/;
+    const phoneRegex = /^[0-9]{10}$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!customer.fullName.trim()) {
+      return "Please enter your full name.";
+    }
+
+    if (!nameRegex.test(customer.fullName.trim())) {
+      return "Full name should contain only letters.";
+    }
+
+    if (!customer.phone.trim()) {
+      return "Please enter your phone number.";
+    }
+
+    if (!phoneRegex.test(customer.phone.trim())) {
+      return "Phone number must contain exactly 10 digits.";
+    }
+
+    if (!customer.email.trim()) {
+      return "Please enter your email address.";
+    }
+
+    if (!emailRegex.test(customer.email.trim())) {
+      return "Please enter a valid email address.";
+    }
+
+    if (!customer.address.trim()) {
+      return "Please enter your delivery address.";
+    }
+
+    if (customer.address.trim().length < 10) {
+      return "Delivery address must be at least 10 characters long.";
+    }
+
+    return "";
+  };
+
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
+
     if (!cartItems.length) {
       setError("Your cart is empty.");
       return;
     }
 
-    if (!customer.fullName || !customer.phone || !customer.email || !customer.address) {
-      setError("Please fill in your customer details before placing the order.");
+    const validationError = validateCustomerDetails();
+
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -80,7 +124,12 @@ export default function CartPage() {
 
     try {
       const orderPayload = {
-        customer,
+        customer: {
+          fullName: customer.fullName.trim(),
+          phone: customer.phone.trim(),
+          email: customer.email.trim(),
+          address: customer.address.trim(),
+        },
         items: cartItems,
         subtotal,
         deliveryFee,
@@ -113,8 +162,8 @@ export default function CartPage() {
         <section className="cart-hero">
           <div>
             <p className="cart-kicker">Your Cart</p>
-            <h1>Review your IconX order before checkout.</h1>
-            <p>Keep your picks here, update quantities, then place the order with your customer details.</p>
+            <h1 className="gradient-text-z">Review your order before checkout.</h1>
+            <p className="gradient">Review your selections and complete your order smoothly.</p>
           </div>
           <div className="cart-hero-total">
             <span>Current total</span>
@@ -125,9 +174,16 @@ export default function CartPage() {
         <section className="cart-layout">
           <div className="cart-items-panel">
             <div className="cart-panel-head">
-              <h2>Cart Items</h2>
+              <p className="cart-kicker-b">Cart Items</p>
               {cartItems.length > 0 && (
-                <button type="button" className="cart-clear-btn" onClick={() => { clearCart(); setCartItems([]); }}>
+                <button
+                  type="button"
+                  className="cart-clear-btn"
+                  onClick={() => {
+                    clearCart();
+                    setCartItems([]);
+                  }}
+                >
                   Clear Cart
                 </button>
               )}
@@ -135,7 +191,8 @@ export default function CartPage() {
 
             {cartItems.length === 0 ? (
               <div className="cart-empty-state">
-                <h3>Your cart is empty</h3>
+                <ShoppingCart className="empty-cart-icon" />
+                <h3>Your cart is currently empty!</h3>
                 <p>Add products from the collection page to start your order.</p>
                 <Link to="/products" className="cart-shop-btn">
                   Continue Shopping
@@ -154,16 +211,32 @@ export default function CartPage() {
                     </div>
                     <div className="cart-item-controls">
                       <div className="cart-qty">
-                        <button type="button" onClick={() => handleQuantityChange(item.id, (item.quantity || 1) - 1)}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleQuantityChange(item.id, (item.quantity || 1) - 1)
+                          }
+                        >
                           -
                         </button>
                         <span>{item.quantity || 1}</span>
-                        <button type="button" onClick={() => handleQuantityChange(item.id, (item.quantity || 1) + 1)}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleQuantityChange(item.id, (item.quantity || 1) + 1)
+                          }
+                        >
                           +
                         </button>
                       </div>
-                      <strong>{formatLkr((item.price || 0) * (item.quantity || 1))}</strong>
-                      <button type="button" className="cart-remove-btn" onClick={() => handleRemove(item.id)}>
+                      <strong className="cartItemright">
+                        {formatLkr((item.price || 0) * (item.quantity || 1))}
+                      </strong>
+                      <button
+                        type="button"
+                        className="cart-remove-btn"
+                        onClick={() => handleRemove(item.id)}
+                      >
                         Remove
                       </button>
                     </div>
@@ -175,14 +248,21 @@ export default function CartPage() {
 
           <aside className="cart-summary-panel">
             <div className="cart-summary-card">
-              <p className="cart-kicker">Checkout</p>
-              <h2>Buy Now</h2>
-              <p className="cart-summary-copy">Fill in your details and IconX can handle the order directly for you.</p>
-
+              <p className="cart-kicker-a">Checkout</p>
+              <h2 className="gradient-text">Buy Now</h2>
               <div className="cart-summary-rows">
-                <div><span>Subtotal</span><strong>{formatLkr(subtotal)}</strong></div>
-                <div><span>Delivery</span><strong>{formatLkr(deliveryFee)}</strong></div>
-                <div className="cart-summary-total"><span>Total</span><strong>{formatLkr(total)}</strong></div>
+                <div>
+                  <span>Subtotal</span>
+                  <strong>{formatLkr(subtotal)}</strong>
+                </div>
+                <div>
+                  <span>Delivery</span>
+                  <strong>{formatLkr(deliveryFee)}</strong>
+                </div>
+                <div className="cart-summary-total">
+                  <span>Total</span>
+                  <strong>{formatLkr(total)}</strong>
+                </div>
               </div>
 
               <form className="cart-order-form" onSubmit={handlePlaceOrder}>
@@ -190,31 +270,47 @@ export default function CartPage() {
                   type="text"
                   placeholder="Full name"
                   value={customer.fullName}
-                  onChange={(e) => setCustomer((prev) => ({ ...prev, fullName: e.target.value }))}
+                  onChange={(e) =>
+                    setCustomer((prev) => ({ ...prev, fullName: e.target.value }))
+                  }
                 />
                 <input
                   type="tel"
                   placeholder="Phone number"
                   value={customer.phone}
-                  onChange={(e) => setCustomer((prev) => ({ ...prev, phone: e.target.value }))}
+                  maxLength="10"
+                  onChange={(e) =>
+                    setCustomer((prev) => ({
+                      ...prev,
+                      phone: e.target.value.replace(/[^0-9]/g, ""),
+                    }))
+                  }
                 />
                 <input
                   type="email"
                   placeholder="Email address"
                   value={customer.email}
-                  onChange={(e) => setCustomer((prev) => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) =>
+                    setCustomer((prev) => ({ ...prev, email: e.target.value }))
+                  }
                 />
                 <textarea
                   rows="4"
                   placeholder="Delivery address"
                   value={customer.address}
-                  onChange={(e) => setCustomer((prev) => ({ ...prev, address: e.target.value }))}
+                  onChange={(e) =>
+                    setCustomer((prev) => ({ ...prev, address: e.target.value }))
+                  }
                 />
 
                 {error && <div className="cart-error-msg">{error}</div>}
 
-                <button type="submit" className="cart-buy-btn" disabled={placingOrder || !cartItems.length}>
-                  {placingOrder ? "Placing Order..." : "Buy Now with IconX"}
+                <button
+                  type="submit"
+                  className="cart-buy-btn"
+                  disabled={placingOrder || !cartItems.length}
+                >
+                  {placingOrder ? "Placing Order..." : "Buy now"}
                 </button>
               </form>
             </div>
