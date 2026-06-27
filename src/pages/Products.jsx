@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { db } from "../firebase";
@@ -7,7 +12,6 @@ import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import "./Products.css";
 import { addItemToCart } from "../utils/cart";
 import kokoLogo from "../images/koko.png";
-
 
 const MIN_PRICE = 0;
 const MAX_PRICE = 500000;
@@ -20,18 +24,55 @@ const SEGMENT_FILTERS = {
   },
   android: {
     title: "Android Collection",
-    brands: ["Android", "Samsung", "Google Pixel", "Xiaomi", "Redmi", "OnePlus", "Nothing", "Oppo", "Vivo", "Huawei", "Samsung Galaxy"],
+    brands: [
+      "Android",
+      "Samsung",
+      "Google Pixel",
+      "Xiaomi",
+      "Redmi",
+      "OnePlus",
+      "Nothing",
+      "Oppo",
+      "Vivo",
+      "Huawei",
+      "Samsung Galaxy",
+    ],
     categories: [],
   },
   audio: {
     title: "Audio & Speakers",
-    brands: ["JBL Partybox", "Sony", "Bose", "Beats", "Sennheiser", "Audio-Technica", "Bang & Olufsen", "Marshall"],
-    categories: ["Audio", "Speaker", "Speakers", "Earbuds", "Headphones", "AirPods"],
+    brands: [
+      "JBL Partybox",
+      "Sony",
+      "Bose",
+      "Beats",
+      "Sennheiser",
+      "Audio-Technica",
+      "Bang & Olufsen",
+      "Marshall",
+    ],
+    categories: [
+      "Audio",
+      "Speaker",
+      "Speakers",
+      "Earbuds",
+      "Headphones",
+      "AirPods",
+    ],
   },
   accessories: {
     title: "Accessories",
     brands: [],
-    categories: ["Accessories", "Accessory", "Cases", "Chargers", "Cables", "Wearables", "Watch", "AirPods"],
+    categories: [
+      "Accessories",
+      "Accessory",
+      "Cases",
+      "Chargers",
+      "Cables",
+      "Wearables",
+      "Watch",
+      "AirPods",
+    ],
   },
 };
 
@@ -51,7 +92,7 @@ const toggleSelection = (value, current, update) => {
   update((previous) =>
     previous.includes(value)
       ? previous.filter((item) => item !== value)
-      : [...previous, value]
+      : [...previous, value],
   );
 };
 
@@ -67,6 +108,7 @@ const Products = () => {
   const [brokenImages, setBrokenImages] = useState({});
   const [selectedBrands, setSelectedBrands] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const searchQuery = searchParams.get("search") || "";
 
   useEffect(() => {
     const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
@@ -88,7 +130,9 @@ const Products = () => {
     const categoryParam = searchParams.get("category");
 
     setSelectedBrands(segment?.brands || (brandParam ? [brandParam] : []));
-    setSelectedCategories(segment?.categories || (categoryParam ? [categoryParam] : []));
+    setSelectedCategories(
+      segment?.categories || (categoryParam ? [categoryParam] : []),
+    );
   }, [location.search, searchParams]);
 
   const handleMinChange = (e) => {
@@ -111,26 +155,27 @@ const Products = () => {
     }, 3000);
   }, []);
 
-  const handleBuyNow = useCallback((product) => {
-    addItemToCart(product);
-    navigate("/cart");
-  }, [navigate]);
+  const handleBuyNow = useCallback(
+    (product) => {
+      addItemToCart(product);
+      navigate("/cart");
+    },
+    [navigate],
+  );
 
   const handleImageError = useCallback((productId) => {
-    setBrokenImages((previous) => (
-      previous[productId] ? previous : { ...previous, [productId]: true }
-    ));
+    setBrokenImages((previous) =>
+      previous[productId] ? previous : { ...previous, [productId]: true },
+    );
   }, []);
 
-  const availableBrands = [...new Set(products
-    .map((product) => product.brands)
-    .filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b));
+  const availableBrands = [
+    ...new Set(products.map((product) => product.brands).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
 
-  const availableCategories = [...new Set(products
-    .map((product) => product.category)
-    .filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b));
+  const availableCategories = [
+    ...new Set(products.map((product) => product.category).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
 
   const activeSegment = SEGMENT_FILTERS[searchParams.get("segment")] || null;
   const minPercent = ((minVal - MIN_PRICE) / (MAX_PRICE - MIN_PRICE)) * 100;
@@ -140,10 +185,24 @@ const Products = () => {
     .filter((product) => {
       const matchesPrice = product.price >= minVal && product.price <= maxVal;
       const isActive = product.status === "ACTIVE";
-      const matchesBrand = !selectedBrands.length || matchesToken(product.brands, selectedBrands);
-      const matchesCategory = !selectedCategories.length || matchesToken(product.category, selectedCategories);
+      const matchesBrand =
+        !selectedBrands.length || matchesToken(product.brands, selectedBrands);
+      const matchesCategory =
+        !selectedCategories.length ||
+        matchesToken(product.category, selectedCategories);
+      const matchesSearch =
+        !searchQuery ||
+        normalizeValue(product.name).includes(normalizeValue(searchQuery)) ||
+        normalizeValue(product.brands).includes(normalizeValue(searchQuery)) ||
+        normalizeValue(product.category).includes(normalizeValue(searchQuery));
 
-      return matchesPrice && isActive && matchesBrand && matchesCategory;
+      return (
+        matchesPrice &&
+        isActive &&
+        matchesBrand &&
+        matchesCategory &&
+        matchesSearch
+      );
     })
     .sort((a, b) => {
       if (sortBy === "PriceLowToHigh") return a.price - b.price;
@@ -235,7 +294,9 @@ const Products = () => {
                 <input
                   type="checkbox"
                   checked={selectedBrands.includes(brand)}
-                  onChange={() => toggleSelection(brand, selectedBrands, setSelectedBrands)}
+                  onChange={() =>
+                    toggleSelection(brand, selectedBrands, setSelectedBrands)
+                  }
                 />
                 {brand}
               </label>
@@ -260,7 +321,13 @@ const Products = () => {
                 <input
                   type="checkbox"
                   checked={selectedCategories.includes(category)}
-                  onChange={() => toggleSelection(category, selectedCategories, setSelectedCategories)}
+                  onChange={() =>
+                    toggleSelection(
+                      category,
+                      selectedCategories,
+                      setSelectedCategories,
+                    )
+                  }
                 />
                 {category}
               </label>
@@ -272,9 +339,13 @@ const Products = () => {
           <div className="products-topbar">
             <div className="breadcrumbs">
               <span className="breadcrumb-path">
-                <Link to="/home">Home</Link> <i className="arrow-right">{">"}</i>{" "}
-                <Link to="/products">Collections</Link> <i className="arrow-right">{">"}</i>{" "}
-                <span className="current">{activeSegment?.title || "All Products"}</span>
+                <Link to="/home">Home</Link>{" "}
+                <i className="arrow-right">{">"}</i>{" "}
+                <Link to="/products">Collections</Link>{" "}
+                <i className="arrow-right">{">"}</i>{" "}
+                <span className="current">
+                  {activeSegment?.title || "All Products"}
+                </span>
               </span>
             </div>
 
@@ -297,13 +368,16 @@ const Products = () => {
           <div className="products-page-intro">
             <div>
               <p className="cart-kicker">Filtered Product View</p>
-              <h1>{activeSegment?.title || "Browse all products"}</h1>
+              <h1>
+                {searchQuery
+                  ? `Search results for "${searchQuery}"`
+                  : activeSegment?.title || "Browse all products"}
+              </h1>
               <p className="gradient">
-                Refine by live brand and category data, or return to the category slider
-                for a faster collection-first experience.
+                Refine by live brand and category data, or return to the
+                category slider for a faster collection-first experience.
               </p>
             </div>
-            
           </div>
 
           <div className="products-grid-custom">
@@ -344,9 +418,14 @@ const Products = () => {
                   </p>
 
                   <p className="product-installment">
-                    or 3 x රු{(Number(product.price || 0) / 3).toLocaleString(undefined, {
-                      maximumFractionDigits: 2,
-                    })} with 
+                    or 3 x රු
+                    {(Number(product.price || 0) / 3).toLocaleString(
+                      undefined,
+                      {
+                        maximumFractionDigits: 2,
+                      },
+                    )}{" "}
+                    with
                     <img src={kokoLogo} alt="koko" className="koko-logo" />
                   </p>
                   <div className="product-card-actions">
@@ -367,7 +446,8 @@ const Products = () => {
               ))
             ) : (
               <p className="no-results">
-                No products matched this collection yet. Try clearing a filter or browsing a different category.
+                No products matched this collection yet. Try clearing a filter
+                or browsing a different category.
               </p>
             )}
           </div>
