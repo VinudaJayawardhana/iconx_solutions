@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { auth } from "../firebase";
-import { signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "firebase/auth";
+import { auth, db } from "../firebase";
+import { signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, fetchSignInMethodsForEmail } from "firebase/auth";
+import { addDoc, collection, serverTimestamp, setDoc, doc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router-dom";
 import iconxLogo from "../assets/iconx-logo.jpg"; // place your logo in src/assets/
 import "./Login.css";
@@ -190,16 +191,152 @@ export default function Login() {
     } finally { setLoading(false); }
   };
 
-  /* Handle forgot password */
+  /* ── Handle forgot password ──────────────────────────────────────────────
+     Security: before sending a reset email we check which sign-in providers
+     are linked to this address.
+     • If only "google.com" is linked → block the reset. The user must sign in
+       via Google; there is no password to reset, and sending a reset would
+       let anyone who knows the email address hijack the account.
+     • If "password" provider is present → safe to send.
+     • If the address is not in Firebase Auth at all → we still show the
+       generic success message to avoid leaking which emails exist.
+  ──────────────────────────────────────────────────────────────────────── */
   const handleReset = async () => {
     if (!email) { setError('Enter your email address first.'); return; }
-    setLoading(true); setError('');
+
+    const trimmedEmail = email.trim().toLowerCase();
+    setLoading(true);
+    setError('');
+
     try {
-      await sendPasswordResetEmail(auth, email);
+      // Check what sign-in methods are registered for this email
+      let methods = [];
+      try {
+        methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
+      } catch (fetchErr) {
+        // fetchSignInMethodsForEmail throws on invalid email format
+        if (fetchErr.code === 'auth/invalid-email') {
+          setError('Please enter a valid email address.');
+          return;
+        }
+        // Any other error: treat as "unknown address" and fall through to
+        // show generic success (avoids leaking account existence)
+        methods = [];
+      }
+
+      // Address not in Firebase at all → show success anyway (no info leak)
+      if (methods.length === 0) {
+        setResetSent(true);
+        return;
+      }
+
+      // Google-only account: sending a password reset would be a security
+      // hole — block it and explain to the user.
+      if (methods.length > 0 && !methods.includes('password') && methods.includes('google.com')) {
+        setError(
+          'This email is linked to a Google account. Please sign in with the "Continue with Google" button instead. Password reset is not available for Google accounts.'
+        );
+        return;
+      }
+
+      // Has password provider → safe to send reset
+      await sendPasswordResetEmail(auth, trimmedEmail);
       setResetSent(true);
-    } catch {
-      setError('Could not send reset email. Check the address.');
-    } finally { setLoading(false); }
+
+      // Log reset request to Firestore so admin panel can track it
+      try {
+        await addDoc(collection(db, 'passwordResets'), {
+          email: trimmedEmail,
+          requestedAt: serverTimestamp(),
+          status: 'requested',
+          initiatedBy: 'user',
+          note: 'User initiated password reset from login page',
+        });
+      } catch (logErr) {
+        // Don't block the user if logging fails — reset email already sent
+        console.warn('Could not log password reset request:', logErr);
+      }
+    } catch (err) {
+      if (err.code === 'auth/user-not-found') {
+        // Show generic success so we don't reveal which emails exist
+        setResetSent(true);
+        return;
+      }
+      setError('Could not send reset email. Check the address and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* Handle Google Sign-In — customers only */
+  const handleGoogleLogin = async () => {
+    if (adminMode) {
+      setError('Google Sign-In is only available for customer accounts. Admins and staff must use email + security code.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const cred = await signInWithPopup(auth, provider);
+      const user = cred.user;
+
+      // Try to get existing role from Firestore
+      let role = null;
+      try {
+        const access = await getUserAccess(user.uid);
+        role = access.role;
+      } catch {
+        // No Firestore doc yet — first-time Google sign-in, will create below
+      }
+
+      // Block admins/employees from using Google login
+      if (role === 'admin' || role === 'employee') {
+        await signOut(auth);
+        sessionStorage.removeItem(ADMIN_PORTAL_SESSION_KEY);
+        setError('Admin and staff accounts must log in with email and security code, not Google.');
+        return;
+      }
+
+      // First-time Google user — create their Firestore user document
+      if (!role) {
+        await setDoc(doc(db, 'users', user.uid), {
+          fullName: user.displayName || '',
+          firstName: (user.displayName || '').split(' ')[0] || '',
+          lastName: (user.displayName || '').split(' ').slice(1).join(' ') || '',
+          email: user.email || '',
+          phone: '',
+          role: 'customer',
+          status: 'active',
+          provider: 'google',           // ← marks this as a Google account
+          photoURL: user.photoURL || '',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      } else {
+        // Returning Google user — ensure provider field is always set
+        await setDoc(doc(db, 'users', user.uid), {
+          provider: 'google',
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
+
+      sessionStorage.removeItem(ADMIN_PORTAL_SESSION_KEY);
+      navigate('/home', { replace: true });
+    } catch (err) {
+      sessionStorage.removeItem(ADMIN_PORTAL_SESSION_KEY);
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        // User closed the popup — not an error worth showing
+        return;
+      }
+      setError({
+        'auth/popup-blocked':          'Pop-up was blocked by your browser. Please allow pop-ups for this site.',
+        'auth/account-exists-with-different-credential': 'An account already exists with this email using a different sign-in method.',
+      }[err.code] || 'Google Sign-In failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -392,6 +529,31 @@ export default function Login() {
 
           </form>
 
+          {/* Google Sign-In — customers only */}
+          {!adminMode && (
+            <>
+              <div className="lp-divider">
+                <span>or continue with</span>
+              </div>
+              <button
+                type="button"
+                className="lp-google-btn"
+                onClick={handleGoogleLogin}
+                disabled={loading}
+              >
+                 <span className="lp-btn-shimmer" />  
+                <svg width="18" height="18" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                  <path fill="none" d="M0 0h48v48H0z"/>
+                </svg>
+                Continue with Google
+              </button>
+            </>
+          )}
+
           {/* Sign up link */}
           <div className="lp-signup">
             {adminMode ? (
@@ -399,7 +561,7 @@ export default function Login() {
             ) : (
               <>
                 Don't have an account?{' '}
-                <Link to="/signup">Create one free</Link>
+                <Link to="/signup">Create new account</Link>
               </>
             )}
           </div>

@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import "./Footer.css";
 import { FaFacebook, FaInstagram, FaTwitter, FaWhatsapp } from "react-icons/fa";
-import iconxLogo from "../assets/iconx-logo.jpg";
+import iconxLogo from "../images/logo.png";
 
 const IconXLogo = () => (
   <div className="footer-logo-wrap" aria-label="IconX Mobile Store">

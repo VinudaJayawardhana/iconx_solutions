@@ -65,11 +65,41 @@
   box-shadow: none;
 }
 
+/* ── Glowing logo image ── */
 .footer-logo-image {
   width: 96px;
   max-width: 100%;
   height: auto;
   display: block;
+  border-radius: 16px;
+  filter:
+    drop-shadow(0 0 8px rgba(0, 122, 255, 0.55))
+    drop-shadow(0 0 20px rgba(0, 122, 255, 0.30))
+    drop-shadow(0 0 40px rgba(0, 122, 255, 0.15));
+  animation: logoGlow 3s ease-in-out infinite alternate;
+  transition: filter 0.3s ease;
+}
+
+.footer-logo-image:hover {
+  filter:
+    drop-shadow(0 0 12px rgba(0, 150, 255, 0.85))
+    drop-shadow(0 0 28px rgba(0, 122, 255, 0.55))
+    drop-shadow(0 0 55px rgba(0, 122, 255, 0.30));
+}
+
+@keyframes logoGlow {
+  0% {
+    filter:
+      drop-shadow(0 0 6px rgba(0, 122, 255, 0.45))
+      drop-shadow(0 0 16px rgba(0, 122, 255, 0.22))
+      drop-shadow(0 0 32px rgba(0, 122, 255, 0.10));
+  }
+  100% {
+    filter:
+      drop-shadow(0 0 12px rgba(0, 150, 255, 0.70))
+      drop-shadow(0 0 28px rgba(0, 122, 255, 0.40))
+      drop-shadow(0 0 52px rgba(0, 122, 255, 0.20));
+  }
 }
 
 .footer-logo-copy {

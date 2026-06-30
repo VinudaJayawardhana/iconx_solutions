@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { signOut } from "firebase/auth";
+import { signOut, sendPasswordResetEmail } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import logo from "../../assets/iconx-logo.jpg";
+import logo from "../../images/logo.png";
 import { loadLogo, drawHeader, drawFooter, drawSectionHeader, PDF_COLORS } from "../../utils/pdfTheme";
 import { auth, db } from "../../firebase";
 import { addDoc, collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
@@ -26,7 +26,7 @@ import {
 
 /* ─── STYLES ──────────────────────────────────────────────── */
 const STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
   --bg: #07080d;
@@ -45,8 +45,8 @@ const STYLES = `
   --text: #f1f5f9;
   --text-dim: #94a3b8;
   --muted: #475569;
-  --syne: 'Syne', sans-serif;
-  --dm: 'DM Sans', sans-serif;
+  --syne: 'Inter', sans-serif;
+  --dm: 'Inter', sans-serif;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -89,9 +89,14 @@ const STYLES = `
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: var(--dm);
+  font-family: 'Inter', sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ap-root *, .ap-root *::before, .ap-root *::after {
+  font-family: 'Inter', sans-serif;
 }
 
 /* ── SIDEBAR ─────────────────────────────────────────────── */
@@ -116,37 +121,34 @@ const STYLES = `
   pointer-events: none;
 }
 
-/* Brand */
 .ap-brand {
-  padding: 22px 20px 16px;
+  padding: 20px 20px 18px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
-.ap-brand-logo {
-  font-family: var(--syne);
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #fff 40%, var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.ap-brand-logo-img {
+  width: 148px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
 }
-[data-theme='light'].ap-root .ap-brand-logo {
-  background: linear-gradient(135deg, #0f172a 40%, var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
+[data-theme='light'].ap-root .ap-brand-logo-img {
+  filter: none;
 }
-.ap-brand-logo span { -webkit-text-fill-color: var(--accent); }
 .ap-brand-sub {
+  font-family: var(--syne);
   font-size: 10px;
   color: var(--muted);
-  margin-top: 3px;
-  letter-spacing: 1.5px;
+  letter-spacing: 2.5px;
   text-transform: uppercase;
-  font-weight: 500;
+  font-weight: 600;
+  padding-left: 2px;
 }
 
-/* Profile */
 .ap-profile {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
@@ -181,7 +183,6 @@ const STYLES = `
   50% { box-shadow: 0 0 0 4px rgba(34,197,94,0.1), 0 0 16px var(--green); }
 }
 
-/* Nav */
 .ap-nav { flex: 1; overflow-y: auto; padding: 12px 10px; }
 .ap-nav::-webkit-scrollbar { width: 0; }
 .ap-nav-label {
@@ -219,7 +220,6 @@ const STYLES = `
 }
 .ap-nav-btn.active svg { opacity: 1; }
 
-/* Sidebar bottom */
 .ap-sidebar-bottom { padding: 12px 10px; border-top: 1px solid var(--border); }
 .ap-export-btn {
   width: 100%; padding: 9px 12px;
@@ -249,7 +249,6 @@ const STYLES = `
 /* ── MAIN AREA ────────────────────────────────────────────── */
 .ap-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
-/* Topbar */
 .ap-topbar {
   padding: 0 24px;
   height: 60px;
@@ -292,7 +291,6 @@ const STYLES = `
 .ap-search::placeholder { color: var(--muted); }
 .ap-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
 
-/* Content area */
 .ap-content { flex: 1; overflow-y: auto; padding: 22px 26px; }
 .ap-content::-webkit-scrollbar { width: 4px; }
 .ap-content::-webkit-scrollbar-track { background: transparent; }
@@ -364,7 +362,6 @@ const STYLES = `
 }
 .ap-panel-sub { font-size: 11px; color: var(--muted); font-weight: 400; font-family: var(--dm); }
 
-/* Gauge */
 .ap-gauge-wrap { display: flex; flex-direction: column; align-items: center; }
 .ap-gauge-label { font-size: 11px; color: var(--muted); margin-top: 4px; text-align: center; }
 .ap-gauge-val { font-family: var(--syne); font-size: 15px; font-weight: 700; text-align: center; }
@@ -395,7 +392,6 @@ const STYLES = `
 .ap-eff-fill { height: 100%; border-radius: 3px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
 .ap-eff-text { font-family: var(--syne); font-size: 12px; font-weight: 700; }
 
-/* Badges */
 .ap-badge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 9px; border-radius: 20px;
@@ -405,8 +401,8 @@ const STYLES = `
 .ap-badge.optimal { background: rgba(34,197,94,0.13); color: var(--green); }
 .ap-badge.stable { background: rgba(245,158,11,0.13); color: var(--amber); }
 .ap-badge.critical { background: rgba(239,68,68,0.13); color: var(--red); }
+.ap-badge.info { background: rgba(59,130,246,0.13); color: var(--accent); }
 
-/* Action buttons */
 .ap-action-btn {
   background: transparent;
   border: 1px solid var(--border);
@@ -421,8 +417,8 @@ const STYLES = `
 }
 .ap-action-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.06); }
 .ap-action-btn.del:hover { border-color: var(--red); color: var(--red); background: rgba(239,68,68,0.06); }
+.ap-action-btn.success:hover { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.06); }
 
-/* Expanded row */
 .ap-expanded-row td { background: var(--surface2) !important; padding: 16px 20px !important; border-bottom: 1px solid var(--border) !important; }
 .ap-expanded-inner { display: flex; gap: 20px; align-items: flex-start; }
 .ap-detail-tiles { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; flex: 1; }
@@ -430,7 +426,6 @@ const STYLES = `
 .ap-detail-tile-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; font-weight: 600; }
 .ap-detail-tile-val { font-family: var(--syne); font-size: 16px; font-weight: 700; }
 
-/* Filter bar */
 .ap-filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
 .ap-filter-btn {
   padding: 6px 14px;
@@ -443,9 +438,9 @@ const STYLES = `
 }
 .ap-filter-btn:hover { border-color: var(--accent); color: var(--accent); }
 .ap-filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: var(--shadow-accent); }
-.ap-filter-btn.green.active { background: var(--green); border-color: var(--green); color: #000; box-shadow: 0 4px 16px rgba(34,197,94,0.25); }
-.ap-filter-btn.amber.active { background: var(--amber); border-color: var(--amber); color: #000; box-shadow: 0 4px 16px rgba(245,158,11,0.25); }
-.ap-filter-btn.red.active { background: var(--red); border-color: var(--red); color: #fff; box-shadow: 0 4px 16px rgba(239,68,68,0.25); }
+.ap-filter-btn.green.active { background: var(--green); border-color: var(--green); color: #000; }
+.ap-filter-btn.amber.active { background: var(--amber); border-color: var(--amber); color: #000; }
+.ap-filter-btn.red.active { background: var(--red); border-color: var(--red); color: #fff; }
 .ap-filter-spacer { flex: 1; }
 
 /* ── MODAL ──────────────────────────────────────────────── */
@@ -486,7 +481,6 @@ const STYLES = `
 }
 .ap-modal-close:hover { background: rgba(239,68,68,0.12); color: var(--red); border-color: rgba(239,68,68,0.3); }
 
-/* Form */
 .ap-form-group { margin-bottom: 16px; }
 .ap-form-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 500; letter-spacing: 0.2px; }
 .ap-form-input {
@@ -526,7 +520,6 @@ const STYLES = `
 .ap-submit-btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(59,130,246,0.3); }
 .ap-submit-btn:active { transform: translateY(0); }
 
-/* Group items */
 .ap-group-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--border); margin-bottom: 8px; transition: border-color 0.15s; }
 .ap-group-item:hover { border-color: var(--border-hover); }
 .ap-group-rank { width: 28px; height: 28px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-family: var(--syne); font-size: 12px; font-weight: 700; flex-shrink: 0; }
@@ -538,20 +531,16 @@ const STYLES = `
 .ap-group-eff-bar { width: 60px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
 .ap-group-eff-fill { height: 100%; border-radius: 2px; }
 
-/* Placeholder */
 .ap-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: var(--muted); gap: 12px; }
 .ap-placeholder-icon { font-size: 42px; opacity: 0.25; }
 .ap-placeholder-text { font-family: var(--syne); font-size: 16px; font-weight: 600; }
 
-/* Section titles */
 .ap-section-title { font-family: var(--syne); font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 12px; margin-top: 4px; }
 
-/* Chart tooltip */
 .ap-chart-tip { background: var(--surface); border: 1px solid var(--border-hover); border-radius: var(--radius-sm); padding: 9px 13px; font-size: 12px; box-shadow: var(--shadow-md); }
 .ap-chart-tip-label { color: var(--muted); margin-bottom: 3px; }
 .ap-chart-tip-val { font-family: var(--syne); font-weight: 700; }
 
-/* Add button */
 .ap-add-btn {
   padding: 8px 16px;
   border-radius: var(--radius-sm); border: none;
@@ -566,7 +555,6 @@ const STYLES = `
 .ap-add-btn:hover { opacity: 0.88; transform: translateY(-1px); }
 .ap-add-btn:active { transform: translateY(0); }
 
-/* Settings */
 .ap-settings-section { margin-bottom: 26px; }
 .ap-settings-title { font-family: var(--syne); font-size: 15px; font-weight: 700; margin-bottom: 4px; }
 .ap-settings-sub { font-size: 12px; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
@@ -596,7 +584,6 @@ const STYLES = `
 .ap-settings-reset { padding: 10px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: var(--dm); font-size: 13px; cursor: pointer; margin-top: 16px; margin-left: 8px; transition: all 0.15s; }
 .ap-settings-reset:hover { color: var(--text); border-color: var(--border-hover); }
 
-/* Employee request cards */
 .ap-request-list { display: grid; gap: 14px; }
 .ap-request-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; transition: border-color 0.18s, box-shadow 0.18s; }
 .ap-request-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-sm); }
@@ -622,7 +609,6 @@ const STYLES = `
 .ap-request-code span { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; font-weight: 600; }
 .ap-request-code strong { font-family: var(--syne); font-size: 18px; letter-spacing: 2px; }
 
-/* Settings inline */
 .ap-settings-inline { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .ap-settings-input {
   min-width: 280px; flex: 1;
@@ -636,6 +622,49 @@ const STYLES = `
   transition: border-color 0.18s, box-shadow 0.18s;
 }
 .ap-settings-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+
+/* ── CART ITEM ROW ───────────────────────────────────────── */
+.ap-cart-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  background: var(--surface2);
+  transition: border-color 0.15s;
+}
+.ap-cart-item:hover { border-color: var(--border-hover); }
+.ap-cart-thumb {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  background: rgba(59,130,246,0.12);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 16px;
+}
+.ap-cart-info { flex: 1; min-width: 0; }
+.ap-cart-name { font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-cart-price { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.ap-qty-ctrl { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.ap-qty-btn {
+  width: 24px; height: 24px;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-dim);
+  cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; line-height: 1;
+}
+.ap-qty-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.06); }
+.ap-qty-val { font-weight: 700; font-size: 13px; min-width: 20px; text-align: center; font-family: var(--syne); }
+.ap-cart-total-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 4px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.ap-cart-total-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.ap-cart-total-val { font-family: var(--syne); font-size: 18px; font-weight: 800; color: var(--green); }
+.ap-cart-empty { text-align: center; padding: 36px 20px; color: var(--muted); }
+.ap-cart-empty-icon { font-size: 32px; opacity: 0.2; margin-bottom: 10px; }
 `;
 
 /* ─── THRESHOLD CONFIG ─────────────────────────────────────── */
@@ -677,11 +706,8 @@ function validateSalaryRecord(rec) {
   const rate = Number(rec?.rate);
   const daysPresent = Number(rec?.daysPresent);
   const daysInMonth = Number(rec?.daysInMonth);
-
   if (!staffId) throw new Error("Staff ID is required.");
-  if (!/^STF-\d{4}$/.test(staffId)) {
-    throw new Error("Incorrect ID input. Staff ID must be in the format STF-xxxx.");
-  }
+  if (!/^STF-\d{4}$/.test(staffId)) throw new Error("Incorrect ID input. Staff ID must be in the format STF-xxxx.");
   if (String(rec?.rate ?? "").trim() === "") throw new Error("Base salary is required.");
   if (Number.isNaN(rate)) throw new Error("Base salary must be a valid number.");
   if (rate <= 0) throw new Error("Base salary must be greater than 0.");
@@ -779,9 +805,7 @@ function buildChart(type, opts = {}) {
 async function exportPDF(records) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const logoImg = await loadLogo(logo);
-  const W = 210;
-  const H = 297;
-  const M = 14;
+  const W = 210, H = 297, M = 14;
   const optimal = records.filter((r) => r.status === 'optimal');
   const stable = records.filter((r) => r.status === 'stable');
   const critical = records.filter((r) => r.status === 'critical');
@@ -792,22 +816,16 @@ async function exportPDF(records) {
   const topPayout = [...records].sort((a, b) => (b.salary || 0) - (a.salary || 0))[0] || null;
   const highestAttendance = [...records].sort((a, b) => ((b.daysPresent || 0) / Math.max(b.daysInMonth || 1, 1)) - ((a.daysPresent || 0) / Math.max(a.daysInMonth || 1, 1)))[0] || null;
 
-  const paintPage = () => {
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, W, H, 'F');
-  };
-
+  const paintPage = () => { doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, H, 'F'); };
   const ensureSpace = (needed) => {
     if (y + needed <= 276) return;
-    doc.addPage();
-    paintPage();
+    doc.addPage(); paintPage();
     drawHeader(doc, logoImg, "Salary Report", "Attendance-based monthly payroll summary");
     y = 42;
   };
 
   paintPage();
   drawHeader(doc, logoImg, "Salary Report", "Attendance-based monthly payroll summary");
-
   let y = 42;
   y = drawSectionHeader(doc, "Overview KPIs", y);
 
@@ -820,137 +838,49 @@ async function exportPDF(records) {
   const cardW = (W - M * 2 - 9) / 4;
   kpis.forEach((k, i) => {
     const x = M + i * (cardW + 3);
-    doc.setFillColor(...PDF_COLORS.lightBg);
-    doc.setDrawColor(...PDF_COLORS.border);
-    doc.setLineWidth(0.3);
+    doc.setFillColor(...PDF_COLORS.lightBg); doc.setDrawColor(...PDF_COLORS.border); doc.setLineWidth(0.3);
     doc.roundedRect(x, y, cardW, 21, 2, 2, 'FD');
-    doc.setFillColor(...k.c);
-    doc.rect(x, y, cardW, 1.4, 'F');
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(...PDF_COLORS.muted);
+    doc.setFillColor(...k.c); doc.rect(x, y, cardW, 1.4, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...PDF_COLORS.muted);
     doc.text(k.label, x + cardW / 2, y + 8, { align: 'center' });
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...PDF_COLORS.primary);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...PDF_COLORS.primary);
     doc.text(String(k.val), x + cardW / 2, y + 16, { align: 'center' });
   });
 
-  y += 29;
-  ensureSpace(32);
-  
+  y += 29; ensureSpace(32);
   y = drawSectionHeader(doc, "Report Snapshot", y);
-  
-  doc.setFillColor(...PDF_COLORS.lightBg);
-  doc.setDrawColor(...PDF_COLORS.border);
-  doc.setLineWidth(0.3);
+  doc.setFillColor(...PDF_COLORS.lightBg); doc.setDrawColor(...PDF_COLORS.border); doc.setLineWidth(0.3);
   doc.roundedRect(M, y, W - M * 2, 28, 3, 3, 'FD');
-  
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(...PDF_COLORS.muted);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...PDF_COLORS.muted);
   doc.text(`Months covered: ${reportMonths.length ? reportMonths.join(', ') : 'Not specified'}`, M + 6, y + 9);
   doc.text(`Average efficiency: ${avgEff}%`, M + 6, y + 18);
-  doc.text(
-    `Top payout: ${topPayout ? `${topPayout.staffId} (${fmt(topPayout.salary)})` : '-'}`,
-    W / 2 + 6,
-    y + 9
-  );
-  doc.text(
-    `Best attendance: ${highestAttendance ? `${highestAttendance.staffId} (${highestAttendance.daysPresent || 0}/${highestAttendance.daysInMonth || 0})` : '-'}`,
-    W / 2 + 6,
-    y + 18
-  );
+  doc.text(`Top payout: ${topPayout ? `${topPayout.staffId} (${fmt(topPayout.salary)})` : '-'}`, W / 2 + 6, y + 9);
+  doc.text(`Best attendance: ${highestAttendance ? `${highestAttendance.staffId} (${highestAttendance.daysPresent || 0}/${highestAttendance.daysInMonth || 0})` : '-'}`, W / 2 + 6, y + 18);
 
   y += 36;
   const addChart = (title, imgData, h = 42) => {
-    ensureSpace(h + 14);
-    y = drawSectionHeader(doc, title, y);
-    doc.addImage(imgData, 'PNG', M, y + 2, W - M * 2, h);
-    y += h + 8;
+    ensureSpace(h + 14); y = drawSectionHeader(doc, title, y);
+    doc.addImage(imgData, 'PNG', M, y + 2, W - M * 2, h); y += h + 8;
   };
 
-  const slice = [...records]
-    .sort((a, b) => (b.salary || 0) - (a.salary || 0))
-    .slice(0, 12);
+  const slice = [...records].sort((a, b) => (b.salary || 0) - (a.salary || 0)).slice(0, 12);
+  addChart('Top Salary Distribution', buildChart('bar', { labels: slice.map((r) => r.staffId.slice(-4)), values: slice.map((r) => r.salary), color: '#3b82f6', width: 540, height: 190 }), 44);
+  addChart('Attendance by Staff', buildChart('area', { labels: slice.map((r) => r.staffId.slice(-4)), values: slice.map((r) => Math.round(((r.daysPresent || 0) / Math.max(r.daysInMonth || 1, 1)) * 100)), color: '#a855f7', width: 540, height: 190 }), 44);
+  addChart('Status Breakdown', buildChart('donut', { slices: [{ label: 'Optimal', value: optimal.length, color: '#22c55e' }, { label: 'Stable', value: stable.length, color: '#f59e0b' }, { label: 'Critical', value: critical.length, color: '#ef4444' }], width: 540, height: 200 }), 48);
 
-  addChart(
-    'Top Salary Distribution',
-    buildChart('bar', {
-      labels: slice.map((r) => r.staffId.slice(-4)),
-      values: slice.map((r) => r.salary),
-      color: '#3b82f6',
-      width: 540,
-      height: 190,
-    }),
-    44
-  );
-  addChart(
-    'Attendance by Staff',
-    buildChart('area', {
-      labels: slice.map((r) => r.staffId.slice(-4)),
-      values: slice.map((r) => Math.round(((r.daysPresent || 0) / Math.max(r.daysInMonth || 1, 1)) * 100)),
-      color: '#a855f7',
-      width: 540,
-      height: 190,
-    }),
-    44
-  );
-  addChart(
-    'Status Breakdown',
-    buildChart('donut', {
-      slices: [
-        { label: 'Optimal', value: optimal.length, color: '#22c55e' },
-        { label: 'Stable', value: stable.length, color: '#f59e0b' },
-        { label: 'Critical', value: critical.length, color: '#ef4444' },
-      ],
-      width: 540,
-      height: 200,
-    }),
-    48
-  );
-
-  ensureSpace(18);
-  y = drawSectionHeader(doc, "Salary Records", y);
-  y += 2;
-
+  ensureSpace(18); y = drawSectionHeader(doc, "Salary Records", y); y += 2;
   autoTable(doc, {
     startY: y,
     head: [['Staff ID', 'Month', 'Attendance', 'Base Salary', 'Net Salary', 'Efficiency', 'Status']],
-    body: records.map((r) => [
-      r.staffId,
-      r.salaryMonth || '-',
-      `${r.daysPresent || 0}/${r.daysInMonth || 0}`,
-      fmt(r.rate || 0),
-      fmt(r.salary || 0),
-      `${r.efficiency || 0}%`,
-      String(r.status || '').toUpperCase(),
-    ]),
+    body: records.map((r) => [r.staffId, r.salaryMonth || '-', `${r.daysPresent || 0}/${r.daysInMonth || 0}`, fmt(r.rate || 0), fmt(r.salary || 0), `${r.efficiency || 0}%`, String(r.status || '').toUpperCase()]),
     theme: 'plain',
-    headStyles: {
-      fillColor: [15, 23, 42],
-      textColor: [255, 255, 255],
-      fontSize: 9,
-      fontStyle: 'bold',
-      cellPadding: 2.8,
-    },
-    bodyStyles: {
-      fillColor: [255, 255, 255],
-      textColor: [15, 23, 42],
-      fontSize: 8.6,
-      cellPadding: 2.8,
-    },
+    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 9, fontStyle: 'bold', cellPadding: 2.8 },
+    bodyStyles: { fillColor: [255, 255, 255], textColor: [15, 23, 42], fontSize: 8.6, cellPadding: 2.8 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     didParseCell: (d) => {
       if (d.section === 'body' && d.column.index === 6) {
         const s = String(d.cell.raw).toLowerCase();
-        d.cell.styles.textColor = s === 'OPTIMAL'.toLowerCase()
-          ? [34, 197, 94]
-          : s === 'STABLE'.toLowerCase()
-            ? [245, 158, 11]
-            : [239, 68, 68];
+        d.cell.styles.textColor = s === 'optimal' ? [34, 197, 94] : s === 'stable' ? [245, 158, 11] : [239, 68, 68];
         d.cell.styles.fontStyle = 'bold';
       }
     },
@@ -958,10 +888,7 @@ async function exportPDF(records) {
   });
 
   const total = doc.getNumberOfPages();
-  for (let i = 1; i <= total; i++) {
-    doc.setPage(i);
-    drawFooter(doc, i, total, "iconX Admin System");
-  }
+  for (let i = 1; i <= total; i++) { doc.setPage(i); drawFooter(doc, i, total, "iconX Admin System"); }
   doc.save('iconX_salary_report.pdf');
 }
 
@@ -999,10 +926,11 @@ const I={
   tradeIn:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="7" y="2" width="10" height="20" rx="2" ry="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>,
   attendance:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
   employeeAccess:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6"/><path d="M17 11h6"/></svg>,
+  passwordResets:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
   settings:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
 };
 
-/* ─── GROUP MODAL — view only, NO edit button ──────────────── */
+/* ─── GROUP MODAL ──────────────────────────────────────────── */
 function GroupModal({ type, records, onClose }) {
   const list = records.filter(r => r.status === type).sort((a, b) => b.efficiency - a.efficiency);
   const color = statusColor(type);
@@ -1054,7 +982,6 @@ function GroupModal({ type, records, onClose }) {
                 <div className="ap-group-eff-val" style={{ color }}>{r.efficiency}%</div>
                 <div className="ap-group-eff-bar"><div className="ap-group-eff-fill" style={{ width: r.efficiency + '%', background: color }} /></div>
               </div>
-              {/* NO edit button — view only in charts/modals */}
             </div>
           ))}
         </div>
@@ -1063,7 +990,7 @@ function GroupModal({ type, records, onClose }) {
   );
 }
 
-/* ─── RECORD MODAL — view only, NO edit button ─────────────── */
+/* ─── RECORD MODAL ─────────────────────────────────────────── */
 function RecordModal({ record, onClose }) {
   return (
     <div className="ap-modal-overlay" onClick={onClose}>
@@ -1086,7 +1013,6 @@ function RecordModal({ record, onClose }) {
             ))}
           </div>
         </div>
-        {/* NO Edit Record button — use the ✏️ button in the Attendance table to edit */}
         <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', paddingTop: 12 }}>
           To edit this record, use the ✏️ edit button in the Attendance table.
         </div>
@@ -1101,43 +1027,18 @@ function EditModal({ record, onClose, onSave }) {
   const [error, setError] = useState("");
   const validateField = (key, value) => {
     const trimmedValue = String(value || "").trim();
-
-    if (key === "staffId") {
-      if (!trimmedValue) return "Staff ID is required.";
-      if (!/^STF-\d{4}$/i.test(trimmedValue)) return "Incorrect ID input. Staff ID must be in the format STF-xxxx.";
-      return "";
-    }
-
-    if (key === "hours") {
-      if (!trimmedValue) return "Work hours are required.";
-      if (Number.isNaN(Number(trimmedValue))) return "Work hours must be a valid number.";
-      if (Number(trimmedValue) < 0) return "Work hours cannot be less than 0.";
-      return "";
-    }
-
-    if (key === "rate") {
-      if (!trimmedValue) return "Hourly rate is required.";
-      if (Number.isNaN(Number(trimmedValue))) return "Hourly rate must be a valid number.";
-      if (Number(trimmedValue) < 0) return "Hourly rate cannot be less than 0.";
-      return "";
-    }
-
+    if (key === "staffId") { if (!trimmedValue) return "Staff ID is required."; if (!/^STF-\d{4}$/i.test(trimmedValue)) return "Incorrect ID input. Staff ID must be in the format STF-xxxx."; return ""; }
+    if (key === "hours") { if (!trimmedValue) return "Work hours are required."; if (Number.isNaN(Number(trimmedValue))) return "Work hours must be a valid number."; if (Number(trimmedValue) < 0) return "Work hours cannot be less than 0."; return ""; }
+    if (key === "rate") { if (!trimmedValue) return "Hourly rate is required."; if (Number.isNaN(Number(trimmedValue))) return "Hourly rate must be a valid number."; if (Number(trimmedValue) < 0) return "Hourly rate cannot be less than 0."; return ""; }
     return "";
   };
   const h = parseFloat(f.hours) || 0, r = parseFloat(f.rate) || 0;
   const salary = h * r, eff = calcEff(h, r), status = getStatus(eff);
-  const up = (k) => (e) => {
-    const nextValue = e.target.value;
-    setF(p => ({ ...p, [k]: nextValue }));
-    setError(validateField(k, nextValue));
-  };
+  const up = (k) => (e) => { const nextValue = e.target.value; setF(p => ({ ...p, [k]: nextValue })); setError(validateField(k, nextValue)); };
   const save = () => {
-    const staffIdError = validateField("staffId", f.staffId);
-    if (staffIdError) return setError(staffIdError);
-    const hoursError = validateField("hours", f.hours);
-    if (hoursError) return setError(hoursError);
-    const rateError = validateField("rate", f.rate);
-    if (rateError) return setError(rateError);
+    const staffIdError = validateField("staffId", f.staffId); if (staffIdError) return setError(staffIdError);
+    const hoursError = validateField("hours", f.hours); if (hoursError) return setError(hoursError);
+    const rateError = validateField("rate", f.rate); if (rateError) return setError(rateError);
     onSave({ ...(record||{}), id: record?.id||Date.now().toString(), staffId: f.staffId.trim().toUpperCase(), hours: h, rate: r, salary, efficiency: eff, status });
   };
   return (
@@ -1372,15 +1273,12 @@ function Attendance({ records, setRecords, onGroup, fbAdd, fbUpdate, fbDelete })
                     </td>
                     <td><span className={`ap-badge ${r.status}`}>{statusIcon(r.status)} {statusLabel(r.status)}</span></td>
                     <td onClick={e=>e.stopPropagation()}>
-                      {/* 👁 View */}
                       <button className="ap-action-btn" title="View details" onClick={()=>setViewRecord(r)}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
-                      {/* ✏️ Edit — ONLY available here in the table */}
                       <button className="ap-action-btn" title="Edit record" onClick={()=>setEditing(r)}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
-                      {/* 🗑 Delete */}
                       <button className="ap-action-btn del" title="Delete record" onClick={()=>remove(r.id)}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                       </button>
@@ -1414,7 +1312,6 @@ function Attendance({ records, setRecords, onGroup, fbAdd, fbUpdate, fbDelete })
           </table>
         </div>
       </div>
-      {/* View modal — NO edit button inside */}
       {viewRecord&&<RecordModal record={viewRecord} onClose={()=>setViewRecord(null)} />}
       {(editing||adding)&&<EditModal record={editing} onClose={()=>{setEditing(null);setAdding(false);}} onSave={save} />}
     </>
@@ -1431,9 +1328,7 @@ function Settings({ records, thresholds, setThresholds, adminPortalCode, setAdmi
   const reset=()=>setLocal({optimal:75,stable:45});
   const critPct=local.stable,stbPct=local.optimal-local.stable,optPct=100-local.optimal;
 
-  useEffect(() => {
-    setNextAdminCode(adminPortalCode || DEFAULT_ADMIN_PORTAL_CODE);
-  }, [adminPortalCode]);
+  useEffect(() => { setNextAdminCode(adminPortalCode || DEFAULT_ADMIN_PORTAL_CODE); }, [adminPortalCode]);
 
   return (
     <div>
@@ -1441,34 +1336,11 @@ function Settings({ records, thresholds, setThresholds, adminPortalCode, setAdmi
         <div className="ap-settings-title">Admin Security Code</div>
         <div className="ap-settings-sub">This static admin code is used only for admin portal login and can be changed here anytime.</div>
         <div className="ap-settings-inline">
-          <input
-            className="ap-settings-input"
-            type="text"
-            value={nextAdminCode}
-            placeholder="Enter admin security code"
-            onChange={(e) => setNextAdminCode(e.target.value)}
-          />
-          <button
-            className="ap-settings-apply"
-            onClick={() => {
-              const trimmed = nextAdminCode.trim();
-              if (!trimmed) return;
-              setAdminPortalCode(trimmed);
-              onSaveAdminPortalCode(trimmed);
-            }}
-            disabled={portalCodeSaving}
-          >
+          <input className="ap-settings-input" type="text" value={nextAdminCode} placeholder="Enter admin security code" onChange={(e) => setNextAdminCode(e.target.value)} />
+          <button className="ap-settings-apply" onClick={() => { const trimmed = nextAdminCode.trim(); if (!trimmed) return; setAdminPortalCode(trimmed); onSaveAdminPortalCode(trimmed); }} disabled={portalCodeSaving}>
             {portalCodeSaving ? "Saving..." : "Save Admin Code"}
           </button>
-          <button
-            className="ap-settings-reset"
-            onClick={() => {
-              setNextAdminCode(DEFAULT_ADMIN_PORTAL_CODE);
-              setAdminPortalCode(DEFAULT_ADMIN_PORTAL_CODE);
-              onSaveAdminPortalCode(DEFAULT_ADMIN_PORTAL_CODE);
-            }}
-            disabled={portalCodeSaving}
-          >
+          <button className="ap-settings-reset" onClick={() => { setNextAdminCode(DEFAULT_ADMIN_PORTAL_CODE); setAdminPortalCode(DEFAULT_ADMIN_PORTAL_CODE); onSaveAdminPortalCode(DEFAULT_ADMIN_PORTAL_CODE); }} disabled={portalCodeSaving}>
             Reset Admin Code
           </button>
         </div>
@@ -1477,9 +1349,9 @@ function Settings({ records, thresholds, setThresholds, adminPortalCode, setAdmi
         <div className="ap-settings-title">Efficiency Thresholds</div>
         <div className="ap-settings-sub">Define boundary values for Optimal, Stable, and Critical classifications.</div>
         <div style={{height:28,borderRadius:8,overflow:'hidden',display:'flex',marginBottom:20,border:'1px solid var(--border)'}}>
-          <div style={{width:critPct+'%',background:'rgba(255,69,58,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',fontWeight:600,transition:'width 0.2s'}}>{critPct>10?'Critical 0\u2013'+local.stable+'%':''}</div>
-          <div style={{width:stbPct+'%',background:'rgba(255,159,10,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',fontWeight:600,transition:'width 0.2s'}}>{stbPct>12?'Stable '+local.stable+'\u2013'+local.optimal+'%':''}</div>
-          <div style={{width:optPct+'%',background:'rgba(48,209,88,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',fontWeight:600,transition:'width 0.2s'}}>{optPct>10?'Optimal \u2265'+local.optimal+'%':''}</div>
+          <div style={{width:critPct+'%',background:'rgba(255,69,58,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',fontWeight:600,transition:'width 0.2s'}}>{critPct>10?'Critical 0–'+local.stable+'%':''}</div>
+          <div style={{width:stbPct+'%',background:'rgba(255,159,10,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',fontWeight:600,transition:'width 0.2s'}}>{stbPct>12?'Stable '+local.stable+'–'+local.optimal+'%':''}</div>
+          <div style={{width:optPct+'%',background:'rgba(48,209,88,0.7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',fontWeight:600,transition:'width 0.2s'}}>{optPct>10?'Optimal ≥'+local.optimal+'%':''}</div>
         </div>
         {[['optimal','var(--green)','≥ threshold',local.stable+5,95,local.optimal,'optimal'],['stable','var(--amber)','≥ threshold',5,local.optimal-5,local.stable,'stable']].map(([key,color,range,min,max,val])=>(
           <div key={key} className="ap-threshold-row">
@@ -1527,11 +1399,7 @@ function Settings({ records, thresholds, setThresholds, adminPortalCode, setAdmi
           </BarChart>
         </ResponsiveContainer>
         <div style={{display:'flex',gap:16,marginTop:10,justifyContent:'center'}}>
-          {[
-            {c:'var(--green)', t:'Optimal \u2265' + local.optimal + '%'},
-            {c:'var(--amber)', t:'Stable \u2265' + local.stable + '%'},
-            {c:'var(--red)',   t:'Critical <' + local.stable + '%'},
-          ].map(({c,t})=>(
+          {[{c:'var(--green)',t:'Optimal ≥'+local.optimal+'%'},{c:'var(--amber)',t:'Stable ≥'+local.stable+'%'},{c:'var(--red)',t:'Critical <'+local.stable+'%'}].map(({c,t})=>(
             <div key={t} style={{display:'flex',alignItems:'center',gap:6,fontSize:11,color:c}}>
               <div style={{width:20,height:2,background:c}}/> {t}
             </div>
@@ -1592,8 +1460,7 @@ const REVIEW_FIELDS = [
 
 function normalizeCrudRecord(id, data) {
   return {
-    id,
-    ...data,
+    id, ...data,
     fullName: data.fullName || [data.firstName, data.lastName].filter(Boolean).join(" ").trim() || "—",
     customerName: data.customerName || data.fullName || [data.firstName, data.lastName].filter(Boolean).join(" ").trim() || "—",
   };
@@ -1609,55 +1476,26 @@ function getDateValue(value) {
 
 function formatDateTime(value) {
   const date = getDateValue(value);
-  return date
-    ? date.toLocaleString("en-GB", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "—";
+  return date ? date.toLocaleString("en-GB", { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 }
 
 function formatShortDate(value) {
   const date = getDateValue(value);
-  return date
-    ? date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
-    : "—";
+  return date ? date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—";
 }
 
 function normalizeLabel(value, fallback = "Unknown") {
   return String(value || fallback).trim() || fallback;
 }
 
-function getTradeInValue(item) {
-  return Number(item.trade_value ?? item.estimate) || 0;
-}
-
-function getTradeInCustomerName(item) {
-  return item.customer_name || item.customerName || "—";
-}
-
-function getTradeInPhone(item) {
-  return item.customer_phone || item.phone || "—";
-}
-
-function getTradeInModel(item) {
-  return item.device_model || item.model || "—";
-}
-
-function getTradeInImei(item) {
-  return item.IMEI || item.imei || "—";
-}
-
-function getTradeInStorage(item) {
-  return item.storage || "—";
-}
-
+function getTradeInValue(item) { return Number(item.trade_value ?? item.estimate) || 0; }
+function getTradeInCustomerName(item) { return item.customer_name || item.customerName || "—"; }
+function getTradeInPhone(item) { return item.customer_phone || item.phone || "—"; }
+function getTradeInModel(item) { return item.device_model || item.model || "—"; }
+function getTradeInImei(item) { return item.IMEI || item.imei || "—"; }
+function getTradeInStorage(item) { return item.storage || "—"; }
 function getTradeInConditionSummary(item) {
   if (typeof item.condition === "string") return item.condition;
-
   if (item.condition && typeof item.condition === "object") {
     const flags = [];
     if (item.condition.powersOn) flags.push("Powers On");
@@ -1669,314 +1507,95 @@ function getTradeInConditionSummary(item) {
     if (item.condition.waterDamage) flags.push("Water Damage");
     return flags.length ? flags.join(", ") : "—";
   }
-
   return "—";
 }
-
 function isMobileTradeIn(item) {
   const type = String(item.trade_type || item.deviceType || "").toLowerCase();
   return type.includes("mobile") || type.includes("smartphone") || (!type && (item.device_model || item.IMEI));
 }
 
 function groupCounts(items, getKey, limit = 6) {
-  return Object.entries(
-    items.reduce((acc, item) => {
-      const key = normalizeLabel(getKey(item));
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {})
-  )
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([label, value]) => ({ label, value }));
+  return Object.entries(items.reduce((acc, item) => { const key = normalizeLabel(getKey(item)); acc[key] = (acc[key] || 0) + 1; return acc; }, {}))
+    .sort((a, b) => b[1] - a[1]).slice(0, limit).map(([label, value]) => ({ label, value }));
 }
 
 function buildTimeline(items, getValue) {
-  return Object.values(
-    items.reduce((acc, item) => {
-      const date = getDateValue(item.createdAt || item.updatedAt);
-      const key = date ? date.toISOString().slice(0, 10) : "undated";
-      if (!acc[key]) {
-        acc[key] = { label: date ? formatShortDate(date) : "No date", sortKey: key, value: 0 };
-      }
-      acc[key].value += getValue ? getValue(item) : 1;
-      return acc;
-    }, {})
-  )
-    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-    .slice(-7);
+  return Object.values(items.reduce((acc, item) => {
+    const date = getDateValue(item.createdAt || item.updatedAt);
+    const key = date ? date.toISOString().slice(0, 10) : "undated";
+    if (!acc[key]) acc[key] = { label: date ? formatShortDate(date) : "No date", sortKey: key, value: 0 };
+    acc[key].value += getValue ? getValue(item) : 1;
+    return acc;
+  }, {})).sort((a, b) => a.sortKey.localeCompare(b.sortKey)).slice(-7);
 }
 
 function exportCrudCsv(title, items, fields) {
   const rows = [
-    [...fields.map((field) => field.label), "Created At", "Updated At"],
-    ...items.map((item) => [
-      ...fields.map((field) => String(item[field.key] ?? "—").replace(/,/g, " ")),
-      formatDateTime(item.createdAt),
-      formatDateTime(item.updatedAt),
-    ]),
+    [...fields.map((f) => f.label), "Created At", "Updated At"],
+    ...items.map((item) => [...fields.map((f) => String(item[f.key] ?? "—").replace(/,/g, " ")), formatDateTime(item.createdAt), formatDateTime(item.updatedAt)]),
   ];
-  const csv = rows.map((row) => row.join(",")).join("\n");
-  const link = Object.assign(document.createElement("a"), {
-    href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
-    download: `${title.toLowerCase().replace(/\s+/g, "_")}_report.csv`,
-  });
-  link.click();
-  URL.revokeObjectURL(link.href);
+  const csv = rows.map((r) => r.join(",")).join("\n");
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: `${title.toLowerCase().replace(/\s+/g, "_")}_report.csv` });
+  a.click(); URL.revokeObjectURL(a.href);
 }
 
 function buildCrudInsights(collectionName, items) {
   const lowerStatus = (item) => String(item.status || "").toLowerCase();
-
   if (collectionName === "products") {
     const active = items.filter((item) => lowerStatus(item) === "active").length;
     const inactive = items.filter((item) => lowerStatus(item) === "inactive").length;
     const stockTotal = items.reduce((sum, item) => sum + (Number(item.stock_in) || 0), 0);
     const inventoryValue = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.stock_in) || 0), 0);
-    return {
-      metrics: [
-        { label: "Products", value: items.length, tone: "blue", accent: "#0a84ff" },
-        { label: "Active", value: active, tone: "green", accent: "#30d158" },
-        { label: "Units In Stock", value: stockTotal, tone: "amber", accent: "#ff9f0a" },
-        { label: "Inventory Value", value: fmt(inventoryValue), tone: "purple", accent: "#bf5af2" },
-      ],
-      donutTitle: "Product Status",
-      donut: [
-        { label: "Active", value: active, color: "#30d158" },
-        { label: "Inactive", value: inactive, color: "#ff453a" },
-      ].filter((item) => item.value > 0),
-      barTitle: "Top Categories",
-      bars: groupCounts(items, (item) => item.category),
-      trendTitle: "Inventory Value Trend",
-      trend: buildTimeline(items, (item) => (Number(item.price) || 0) * (Number(item.stock_in) || 0)),
-      filename: "product_report.pdf",
-    };
+    return { metrics: [{ label: "Products", value: items.length, tone: "blue", accent: "#0a84ff" }, { label: "Active", value: active, tone: "green", accent: "#30d158" }, { label: "Units In Stock", value: stockTotal, tone: "amber", accent: "#ff9f0a" }, { label: "Inventory Value", value: fmt(inventoryValue), tone: "purple", accent: "#bf5af2" }], donutTitle: "Product Status", donut: [{ label: "Active", value: active, color: "#30d158" }, { label: "Inactive", value: inactive, color: "#ff453a" }].filter((item) => item.value > 0), barTitle: "Top Categories", bars: groupCounts(items, (item) => item.category), trendTitle: "Inventory Value Trend", trend: buildTimeline(items, (item) => (Number(item.price) || 0) * (Number(item.stock_in) || 0)), filename: "product_report.pdf" };
   }
-
   if (collectionName === "customers") {
     const active = items.filter((item) => lowerStatus(item) === "active").length;
-    const roleCount = groupCounts(items, (item) => item.role);
-    return {
-      metrics: [
-        { label: "Customers", value: items.length, tone: "blue", accent: "#0a84ff" },
-        { label: "Active", value: active, tone: "green", accent: "#30d158" },
-        { label: "Inactive", value: Math.max(items.length - active, 0), tone: "red", accent: "#ff453a" },
-        { label: "With Email", value: items.filter((item) => item.email).length, tone: "purple", accent: "#bf5af2" },
-      ],
-      donutTitle: "Customer Status",
-      donut: groupCounts(items, (item) => item.status).map((item, index) => ({
-        ...item,
-        color: ["#30d158", "#ff9f0a", "#ff453a", "#bf5af2"][index % 4],
-      })),
-      barTitle: "Roles",
-      bars: roleCount,
-      trendTitle: "Customer Additions",
-      trend: buildTimeline(items),
-      filename: "customer_report.pdf",
-    };
+    return { metrics: [{ label: "Customers", value: items.length, tone: "blue", accent: "#0a84ff" }, { label: "Active", value: active, tone: "green", accent: "#30d158" }, { label: "Inactive", value: Math.max(items.length - active, 0), tone: "red", accent: "#ff453a" }, { label: "With Email", value: items.filter((item) => item.email).length, tone: "purple", accent: "#bf5af2" }], donutTitle: "Customer Status", donut: groupCounts(items, (item) => item.status).map((item, index) => ({ ...item, color: ["#30d158", "#ff9f0a", "#ff453a", "#bf5af2"][index % 4] })), barTitle: "Roles", bars: groupCounts(items, (item) => item.role), trendTitle: "Customer Additions", trend: buildTimeline(items), filename: "customer_report.pdf" };
   }
-
   if (collectionName === "selectedCustomers") {
     const totalBudget = items.reduce((sum, item) => sum + (Number(item.budget) || 0), 0);
-    return {
-      metrics: [
-        { label: "Leads", value: items.length, tone: "blue", accent: "#0a84ff" },
-        { label: "Follow Ups", value: items.filter((item) => lowerStatus(item).includes("follow")).length, tone: "amber", accent: "#ff9f0a" },
-        { label: "Hot Interest", value: items.filter((item) => item.interest).length, tone: "green", accent: "#30d158" },
-        { label: "Budget Sum", value: fmt(totalBudget), tone: "purple", accent: "#bf5af2" },
-      ],
-      donutTitle: "Lead Status",
-      donut: groupCounts(items, (item) => item.status).map((item, index) => ({
-        ...item,
-        color: ["#0a84ff", "#ff9f0a", "#30d158", "#ff453a"][index % 4],
-      })),
-      barTitle: "Interested Products",
-      bars: groupCounts(items, (item) => item.interest),
-      trendTitle: "Lead Creation Trend",
-      trend: buildTimeline(items),
-      filename: "selected_customer_report.pdf",
-    };
+    return { metrics: [{ label: "Leads", value: items.length, tone: "blue", accent: "#0a84ff" }, { label: "Follow Ups", value: items.filter((item) => lowerStatus(item).includes("follow")).length, tone: "amber", accent: "#ff9f0a" }, { label: "Hot Interest", value: items.filter((item) => item.interest).length, tone: "green", accent: "#30d158" }, { label: "Budget Sum", value: fmt(totalBudget), tone: "purple", accent: "#bf5af2" }], donutTitle: "Lead Status", donut: groupCounts(items, (item) => item.status).map((item, index) => ({ ...item, color: ["#0a84ff", "#ff9f0a", "#30d158", "#ff453a"][index % 4] })), barTitle: "Interested Products", bars: groupCounts(items, (item) => item.interest), trendTitle: "Lead Creation Trend", trend: buildTimeline(items), filename: "selected_customer_report.pdf" };
   }
-
   if (collectionName === "vendors") {
     const active = items.filter((item) => lowerStatus(item) === "active").length;
-    return {
-      metrics: [
-        { label: "Vendors", value: items.length, tone: "blue", accent: "#0a84ff" },
-        { label: "Active", value: active, tone: "green", accent: "#30d158" },
-        { label: "Categories", value: new Set(items.map((item) => normalizeLabel(item.category))).size, tone: "amber", accent: "#ff9f0a" },
-        { label: "With Email", value: items.filter((item) => item.email).length, tone: "purple", accent: "#bf5af2" },
-      ],
-      donutTitle: "Vendor Status",
-      donut: groupCounts(items, (item) => item.status).map((item, index) => ({
-        ...item,
-        color: ["#30d158", "#ff453a", "#ff9f0a", "#bf5af2"][index % 4],
-      })),
-      barTitle: "Vendor Categories",
-      bars: groupCounts(items, (item) => item.category),
-      trendTitle: "Vendor Creation Trend",
-      trend: buildTimeline(items),
-      filename: "vendor_report.pdf",
-    };
+    return { metrics: [{ label: "Vendors", value: items.length, tone: "blue", accent: "#0a84ff" }, { label: "Active", value: active, tone: "green", accent: "#30d158" }, { label: "Categories", value: new Set(items.map((item) => normalizeLabel(item.category))).size, tone: "amber", accent: "#ff9f0a" }, { label: "With Email", value: items.filter((item) => item.email).length, tone: "purple", accent: "#bf5af2" }], donutTitle: "Vendor Status", donut: groupCounts(items, (item) => item.status).map((item, index) => ({ ...item, color: ["#30d158", "#ff453a", "#ff9f0a", "#bf5af2"][index % 4] })), barTitle: "Vendor Categories", bars: groupCounts(items, (item) => item.category), trendTitle: "Vendor Creation Trend", trend: buildTimeline(items), filename: "vendor_report.pdf" };
   }
-
   if (collectionName === "customerReviews") {
-    return {
-      metrics: [
-        { label: "Reviews", value: items.length, tone: "blue", accent: "#0a84ff" },
-        { label: "New", value: items.filter((item) => lowerStatus(item) === "new").length, tone: "green", accent: "#30d158" },
-        { label: "Resolved", value: items.filter((item) => ["closed", "resolved", "done"].includes(lowerStatus(item))).length, tone: "amber", accent: "#ff9f0a" },
-        { label: "Open", value: items.filter((item) => !["closed", "resolved", "done"].includes(lowerStatus(item))).length, tone: "red", accent: "#ff453a" },
-      ],
-      donutTitle: "Review Status",
-      donut: groupCounts(items, (item) => item.status).map((item, index) => ({
-        ...item,
-        color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4],
-      })),
-      barTitle: "Top Subjects",
-      bars: groupCounts(items, (item) => item.subject),
-      trendTitle: "Review Intake Trend",
-      trend: buildTimeline(items),
-      filename: "reviews_report.pdf",
-    };
+    return { metrics: [{ label: "Reviews", value: items.length, tone: "blue", accent: "#0a84ff" }, { label: "New", value: items.filter((item) => lowerStatus(item) === "new").length, tone: "green", accent: "#30d158" }, { label: "Resolved", value: items.filter((item) => ["closed", "resolved", "done"].includes(lowerStatus(item))).length, tone: "amber", accent: "#ff9f0a" }, { label: "Open", value: items.filter((item) => !["closed", "resolved", "done"].includes(lowerStatus(item))).length, tone: "red", accent: "#ff453a" }], donutTitle: "Review Status", donut: groupCounts(items, (item) => item.status).map((item, index) => ({ ...item, color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4] })), barTitle: "Top Subjects", bars: groupCounts(items, (item) => item.subject), trendTitle: "Review Intake Trend", trend: buildTimeline(items), filename: "reviews_report.pdf" };
   }
-
-  return {
-    metrics: [
-      { label: "Records", value: items.length, tone: "blue", accent: "#0a84ff" },
-      { label: "With Status", value: items.filter((item) => item.status).length, tone: "green", accent: "#30d158" },
-      { label: "Created", value: items.filter((item) => item.createdAt).length, tone: "amber", accent: "#ff9f0a" },
-      { label: "Updated", value: items.filter((item) => item.updatedAt).length, tone: "purple", accent: "#bf5af2" },
-    ],
-    donutTitle: "Status Breakdown",
-    donut: groupCounts(items, (item) => item.status).map((item, index) => ({
-      ...item,
-      color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4],
-    })),
-    barTitle: "Top Groups",
-    bars: groupCounts(items, (item) => item.category || item.type || item.role || item.subject),
-    trendTitle: "Creation Trend",
-    trend: buildTimeline(items),
-    filename: "crud_report.pdf",
-  };
+  return { metrics: [{ label: "Records", value: items.length, tone: "blue", accent: "#0a84ff" }, { label: "With Status", value: items.filter((item) => item.status).length, tone: "green", accent: "#30d158" }, { label: "Created", value: items.filter((item) => item.createdAt).length, tone: "amber", accent: "#ff9f0a" }, { label: "Updated", value: items.filter((item) => item.updatedAt).length, tone: "purple", accent: "#bf5af2" }], donutTitle: "Status Breakdown", donut: groupCounts(items, (item) => item.status).map((item, index) => ({ ...item, color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4] })), barTitle: "Top Groups", bars: groupCounts(items, (item) => item.category || item.type || item.role || item.subject), trendTitle: "Creation Trend", trend: buildTimeline(items), filename: "crud_report.pdf" };
 }
 
 function exportCrudPdf({ title, items, fields, collectionName }) {
   const insights = buildCrudInsights(collectionName, items);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageWidth = 210;
-  const margin = 14;
-
-  doc.setFillColor(9, 10, 15);
-  doc.rect(0, 0, pageWidth, 297, "F");
-  doc.setFillColor(10, 132, 255);
-  doc.rect(0, 0, pageWidth, 2, "F");
-  doc.setTextColor(245, 245, 247);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text(title, margin, 18);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(160, 166, 176);
-  doc.text(new Date().toLocaleDateString("en-GB"), pageWidth - margin, 18, { align: "right" });
-
+  const pageWidth = 210, margin = 14;
+  doc.setFillColor(9, 10, 15); doc.rect(0, 0, pageWidth, 297, "F");
+  doc.setFillColor(10, 132, 255); doc.rect(0, 0, pageWidth, 2, "F");
+  doc.setTextColor(245, 245, 247); doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.text(title, margin, 18);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(160, 166, 176); doc.text(new Date().toLocaleDateString("en-GB"), pageWidth - margin, 18, { align: "right" });
   const cardWidth = (pageWidth - margin * 2 - 9) / 4;
   insights.metrics.slice(0, 4).forEach((item, index) => {
     const x = margin + index * (cardWidth + 3);
-    doc.setFillColor(17, 19, 24);
-    doc.roundedRect(x, 28, cardWidth, 20, 2, 2, "F");
+    doc.setFillColor(17, 19, 24); doc.roundedRect(x, 28, cardWidth, 20, 2, 2, "F");
     doc.setFillColor(...(item.accent === "#30d158" ? [48, 209, 88] : item.accent === "#ff453a" ? [255, 69, 58] : item.accent === "#ff9f0a" ? [255, 159, 10] : item.accent === "#bf5af2" ? [191, 90, 242] : [10, 132, 255]));
     doc.rect(x, 28, cardWidth, 1.2, "F");
-    doc.setTextColor(160, 166, 176);
-    doc.text(item.label, x + 4, 36);
-    doc.setTextColor(245, 245, 247);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text(String(item.value), x + 4, 44);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setTextColor(160, 166, 176); doc.text(item.label, x + 4, 36);
+    doc.setTextColor(245, 245, 247); doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.text(String(item.value), x + 4, 44);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
   });
-
   let y = 56;
   const addChart = (chartTitle, imgData, height = 42) => {
-    if (y + height + 14 > 275) {
-      doc.addPage();
-      doc.setFillColor(9, 10, 15);
-      doc.rect(0, 0, pageWidth, 297, "F");
-      y = 20;
-    }
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(245, 245, 247);
-    doc.text(chartTitle, margin, y + 5);
-    doc.addImage(imgData, "PNG", margin, y + 8, pageWidth - margin * 2, height);
-    y += height + 14;
+    if (y + height + 14 > 275) { doc.addPage(); doc.setFillColor(9, 10, 15); doc.rect(0, 0, pageWidth, 297, "F"); y = 20; }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(245, 245, 247); doc.text(chartTitle, margin, y + 5);
+    doc.addImage(imgData, "PNG", margin, y + 8, pageWidth - margin * 2, height); y += height + 14;
   };
-
-  if (insights.bars.length) {
-    addChart(
-      insights.barTitle,
-      buildChart("bar", {
-        labels: insights.bars.map((item) => item.label.slice(0, 10)),
-        values: insights.bars.map((item) => item.value),
-        color: "#0a84ff",
-        width: 540,
-        height: 190,
-      }),
-      44
-    );
-  }
-
-  if (insights.trend.length) {
-    addChart(
-      insights.trendTitle,
-      buildChart("area", {
-        labels: insights.trend.map((item) => item.label),
-        values: insights.trend.map((item) => item.value),
-        color: "#bf5af2",
-        width: 540,
-        height: 190,
-      }),
-      44
-    );
-  }
-
-  if (insights.donut.length) {
-    addChart(
-      insights.donutTitle,
-      buildChart("donut", { slices: insights.donut, width: 540, height: 200 }),
-      48
-    );
-  }
-
-  autoTable(doc, {
-    startY: y,
-    head: [[...fields.map((field) => field.label), "Created", "Updated"]],
-    body: items.slice(0, 24).map((item) => [
-      ...fields.map((field) => item[field.key] || "—"),
-      formatDateTime(item.createdAt),
-      formatDateTime(item.updatedAt),
-    ]),
-    theme: "plain",
-    headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8 },
-    bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8 },
-    alternateRowStyles: { fillColor: [17, 19, 24] },
-    margin: { left: margin, right: margin },
-  });
-
+  if (insights.bars.length) addChart(insights.barTitle, buildChart("bar", { labels: insights.bars.map((item) => item.label.slice(0, 10)), values: insights.bars.map((item) => item.value), color: "#0a84ff", width: 540, height: 190 }), 44);
+  if (insights.trend.length) addChart(insights.trendTitle, buildChart("area", { labels: insights.trend.map((item) => item.label), values: insights.trend.map((item) => item.value), color: "#bf5af2", width: 540, height: 190 }), 44);
+  if (insights.donut.length) addChart(insights.donutTitle, buildChart("donut", { slices: insights.donut, width: 540, height: 200 }), 48);
+  autoTable(doc, { startY: y, head: [[...fields.map((f) => f.label), "Created", "Updated"]], body: items.slice(0, 24).map((item) => [...fields.map((f) => item[f.key] || "—"), formatDateTime(item.createdAt), formatDateTime(item.updatedAt)]), theme: "plain", headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8 }, bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8 }, alternateRowStyles: { fillColor: [17, 19, 24] }, margin: { left: margin, right: margin } });
   const totalPages = doc.getNumberOfPages();
-  for (let index = 1; index <= totalPages; index += 1) {
-    doc.setPage(index);
-    doc.setFillColor(9, 10, 15);
-    doc.rect(0, 285, pageWidth, 12, "F");
-    doc.setFillColor(10, 132, 255);
-    doc.rect(0, 295, pageWidth, 2, "F");
-    doc.setTextColor(160, 166, 176);
-    doc.setFontSize(8);
-    doc.text(`Page ${index} of ${totalPages}`, pageWidth / 2, 291, { align: "center" });
-    doc.text("iconX Admin Reports", margin, 291);
-  }
-
+  for (let index = 1; index <= totalPages; index++) { doc.setPage(index); doc.setFillColor(9, 10, 15); doc.rect(0, 285, pageWidth, 12, "F"); doc.setFillColor(10, 132, 255); doc.rect(0, 295, pageWidth, 2, "F"); doc.setTextColor(160, 166, 176); doc.setFontSize(8); doc.text(`Page ${index} of ${totalPages}`, pageWidth / 2, 291, { align: "center" }); doc.text("iconX Admin Reports", margin, 291); }
   doc.save(insights.filename);
 }
 
@@ -1985,93 +1604,36 @@ const PHONE_REGEX = /^[0-9+\-\s()]{7,20}$/;
 
 function validateCrudField(field, rawValue) {
   const value = typeof rawValue === "string" ? rawValue.trim() : rawValue;
-
-  if (field.required && !String(value ?? "").trim()) {
-    return `${field.label} is required.`;
-  }
-
-  if (!String(value ?? "").trim()) {
-    return "";
-  }
-
-  if (field.type === "email" && !EMAIL_REGEX.test(String(value))) {
-    return `Please enter a valid ${field.label.toLowerCase()}.`;
-  }
-
-  if (field.key === "phone" && !PHONE_REGEX.test(String(value))) {
-    return "Please enter a valid phone number.";
-  }
-
-  if (field.type === "number") {
-    const numericValue = Number(value);
-    if (Number.isNaN(numericValue)) {
-      return `${field.label} must be a valid number.`;
-    }
-    if (numericValue < 0) {
-      return `${field.label} cannot be negative.`;
-    }
-  }
-
+  if (field.required && !String(value ?? "").trim()) return `${field.label} is required.`;
+  if (!String(value ?? "").trim()) return "";
+  if (field.type === "email" && !EMAIL_REGEX.test(String(value))) return `Please enter a valid ${field.label.toLowerCase()}.`;
+  if (field.key === "phone" && !PHONE_REGEX.test(String(value))) return "Please enter a valid phone number.";
+  if (field.type === "number") { const n = Number(value); if (Number.isNaN(n)) return `${field.label} must be a valid number.`; if (n < 0) return `${field.label} cannot be negative.`; }
   return "";
 }
 
 function CrudEntityModal({ title, fields, initialData, onClose, onSave }) {
-  const [form, setForm] = useState(() => {
-    const next = {};
-    fields.forEach((field) => {
-      next[field.key] = initialData?.[field.key] ?? "";
-    });
-    return next;
-  });
+  const [form, setForm] = useState(() => { const next = {}; fields.forEach((f) => { next[f.key] = initialData?.[f.key] ?? ""; }); return next; });
   const [error, setError] = useState("");
-
-  const up = (key) => (e) => {
-    setForm((prev) => ({ ...prev, [key]: e.target.value }));
-    setError("");
-  };
-
+  const up = (key) => (e) => { setForm((prev) => ({ ...prev, [key]: e.target.value })); setError(""); };
   const submit = (e) => {
     e.preventDefault();
-    for (const field of fields) {
-      const message = validateCrudField(field, form[field.key]);
-      if (message) {
-        setError(message);
-        return;
-      }
-    }
+    for (const field of fields) { const message = validateCrudField(field, form[field.key]); if (message) { setError(message); return; } }
     onSave(form);
   };
-
   return (
     <div className="ap-modal-overlay" onClick={onClose}>
       <div className="ap-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
-        <div className="ap-modal-header">
-          <div className="ap-modal-title">{title}</div>
-          <button className="ap-modal-close" onClick={onClose}>×</button>
-        </div>
+        <div className="ap-modal-header"><div className="ap-modal-title">{title}</div><button className="ap-modal-close" onClick={onClose}>×</button></div>
         <form onSubmit={submit}>
-          {error && (
-            <div style={{ color: "#ff453a", fontSize: 13, marginBottom: 12 }}>
-              {error}
-            </div>
-          )}
+          {error && <div style={{ color: "#ff453a", fontSize: 13, marginBottom: 12 }}>{error}</div>}
           {fields.map((field) => (
             <div className="ap-form-group" key={field.key}>
               <label className="ap-form-label">{field.label}</label>
-              <input
-                className="ap-form-input"
-                type={field.type || "text"}
-                value={form[field.key]}
-                onChange={up(field.key)}
-                placeholder={field.placeholder}
-                required={field.required}
-                min={field.type === "number" ? "0" : undefined}
-              />
+              <input className="ap-form-input" type={field.type || "text"} value={form[field.key]} onChange={up(field.key)} placeholder={field.placeholder} required={field.required} min={field.type === "number" ? "0" : undefined} />
             </div>
           ))}
-          <button className="ap-submit-btn" type="submit">
-            {initialData?.id ? "Update Record" : "Create Record"}
-          </button>
+          <button className="ap-submit-btn" type="submit">{initialData?.id ? "Update Record" : "Create Record"}</button>
         </form>
       </div>
     </div>
@@ -2084,74 +1646,34 @@ function CrudPanel({ title, collectionName, fields, search, primaryKey, descript
   const [modal, setModal] = useState(null);
 
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, collectionName),
-      (snapshot) => {
-        setItems(snapshot.docs.map((d) => normalizeCrudRecord(d.id, d.data())));
-        setBusy(false);
-      },
-      (err) => {
-        console.error(`Failed loading ${collectionName}:`, err);
-        setItems([]);
-        setBusy(false);
-      }
-    );
-
+    const unsub = onSnapshot(collection(db, collectionName), (snapshot) => { setItems(snapshot.docs.map((d) => normalizeCrudRecord(d.id, d.data()))); setBusy(false); }, (err) => { console.error(`Failed loading ${collectionName}:`, err); setItems([]); setBusy(false); });
     return unsub;
   }, [collectionName]);
 
-  const filtered = items.filter((item) =>
-    JSON.stringify(item).toLowerCase().includes((search || "").toLowerCase())
-  );
+  const filtered = items.filter((item) => JSON.stringify(item).toLowerCase().includes((search || "").toLowerCase()));
   const insights = buildCrudInsights(collectionName, filtered);
 
   const saveRecord = async (payload) => {
-    const cleanPayload = Object.fromEntries(
-      Object.entries(payload).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value])
-    );
-
-    if (modal?.id) {
-      await updateDoc(doc(db, collectionName, modal.id), {
-        ...cleanPayload,
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      await addDoc(collection(db, collectionName), {
-        ...cleanPayload,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
-
+    const cleanPayload = Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]));
+    if (modal?.id) { await updateDoc(doc(db, collectionName, modal.id), { ...cleanPayload, updatedAt: serverTimestamp() }); }
+    else { await addDoc(collection(db, collectionName), { ...cleanPayload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }); }
     setModal(null);
   };
 
-  const removeRecord = async (id) => {
-    await deleteDoc(doc(db, collectionName, id));
-  };
+  const removeRecord = async (id) => { await deleteDoc(doc(db, collectionName, id)); };
 
   return (
     <>
       <div className="ap-filter-bar">
-        <div>
-          <div className="ap-settings-title">{title}</div>
-          <div className="ap-settings-sub">{description}</div>
-        </div>
+        <div><div className="ap-settings-title">{title}</div><div className="ap-settings-sub">{description}</div></div>
         <div className="ap-filter-spacer" />
-        <button className="ap-export-btn pdf" onClick={() => exportCrudPdf({ title, items: filtered, fields, collectionName })}>
-          Export PDF
-        </button>
-        <button className="ap-export-btn excel" onClick={() => exportCrudCsv(title, filtered, fields)}>
-          Export CSV
-        </button>
+        <button className="ap-export-btn pdf" onClick={() => exportCrudPdf({ title, items: filtered, fields, collectionName })}>Export PDF</button>
+        <button className="ap-export-btn excel" onClick={() => exportCrudCsv(title, filtered, fields)}>Export CSV</button>
         <button className="ap-add-btn" onClick={() => setModal({})}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Add New
         </button>
       </div>
-
       <div className="ap-grid-4">
         {insights.metrics.map((item) => (
           <div key={item.label} className={`ap-stat-card ${item.tone}`}>
@@ -2162,17 +1684,14 @@ function CrudPanel({ title, collectionName, fields, search, primaryKey, descript
           </div>
         ))}
       </div>
-
       <div className="ap-grid-2">
         <div className="ap-panel">
           <div className="ap-panel-title">{insights.barTitle}<span className="ap-panel-sub">Grouped from current results</span></div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={insights.bars.map((item) => ({ name: item.label, value: item.value }))}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} />
-              <YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} />
-              <Tooltip content={<Tip />} />
-              <Bar dataKey="value" fill="#0a84ff" radius={[4, 4, 0, 0]} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} /><YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} />
+              <Tooltip content={<Tip />} /><Bar dataKey="value" fill="#0a84ff" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -2183,44 +1702,31 @@ function CrudPanel({ title, collectionName, fields, search, primaryKey, descript
               <Pie data={insights.donut} dataKey="value" nameKey="label" innerRadius={50} outerRadius={80} paddingAngle={2}>
                 {insights.donut.map((item) => <Cell key={item.label} fill={item.color} />)}
               </Pie>
-              <Tooltip content={<Tip />} />
-              <Legend />
+              <Tooltip content={<Tip />} /><Legend />
             </PieChart>
           </ResponsiveContainer>
         </div>
       </div>
-
       <div className="ap-panel" style={{ marginBottom: 16 }}>
         <div className="ap-panel-title">{insights.trendTitle}<span className="ap-panel-sub">Recent activity across saved records</span></div>
         <ResponsiveContainer width="100%" height={220}>
           <AreaChart data={insights.trend.map((item) => ({ name: item.label, value: item.value }))}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} />
-            <YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} />
+            <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} /><YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} />
             <Tooltip content={<Tip />} />
             <Area type="monotone" dataKey="value" stroke="#bf5af2" fill="rgba(191,90,242,0.25)" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
-
       <div className="ap-panel">
         <div className="ap-table-wrap">
           <table className="ap-table">
-            <thead>
-              <tr>
-                {fields.map((field) => <th key={field.key}>{field.label}</th>)}
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead><tr>{fields.map((f) => <th key={f.key}>{f.label}</th>)}<th>Actions</th></tr></thead>
             <tbody>
               {busy && <tr><td colSpan={fields.length + 1} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>Loading...</td></tr>}
               {!busy && filtered.map((item) => (
                 <tr key={item.id} className="data-row">
-                  {fields.map((field, idx) => (
-                    <td key={field.key} style={idx === 0 ? { fontFamily: "var(--syne)", fontWeight: 600 } : {}}>
-                      {item[field.key] || "—"}
-                    </td>
-                  ))}
+                  {fields.map((f, idx) => <td key={f.key} style={idx === 0 ? { fontFamily: "var(--syne)", fontWeight: 600 } : {}}>{item[f.key] || "—"}</td>)}
                   <td>
                     <button className="ap-action-btn" onClick={() => setModal(item)}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -2233,473 +1739,367 @@ function CrudPanel({ title, collectionName, fields, search, primaryKey, descript
                   </td>
                 </tr>
               ))}
-              {!busy && filtered.length === 0 && (
-                <tr><td colSpan={fields.length + 1} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>No {primaryKey.toLowerCase()} records found</td></tr>
-              )}
+              {!busy && filtered.length === 0 && <tr><td colSpan={fields.length + 1} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>No {primaryKey.toLowerCase()} records found</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
-
-      {modal && (
-        <CrudEntityModal
-          title={`${modal.id ? "Edit" : "Add"} ${primaryKey}`}
-          fields={fields}
-          initialData={modal}
-          onClose={() => setModal(null)}
-          onSave={saveRecord}
-        />
-      )}
+      {modal && <CrudEntityModal title={`${modal.id ? "Edit" : "Add"} ${primaryKey}`} fields={fields} initialData={modal} onClose={() => setModal(null)} onSave={saveRecord} />}
     </>
   );
 }
 
 function exportCommercePdf(orders, cartItems) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageWidth = 210;
-  const pageHeight = 297;
-  const margin = 14;
-  const totalRevenue = orders.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
-  const totalOrderedItems = orders.reduce(
-    (sum, order) => sum + (order.items || []).reduce((inner, item) => inner + (item.quantity || 1), 0),
-    0
-  );
-  const totalCartQty = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+  const pageWidth = 210, pageHeight = 297, margin = 14;
+  const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+  const totalOrderedItems = orders.reduce((sum, o) => sum + (o.items || []).reduce((inner, i) => inner + (i.quantity || 1), 0), 0);
+  const totalCartQty = cartItems.reduce((sum, i) => sum + (i.quantity || 1), 0);
   const avgOrderValue = orders.length ? totalRevenue / orders.length : 0;
   const topOrder = [...orders].sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0))[0] || null;
   const latestOrder = [...orders].sort((a, b) => `${b.createdAt || ""}`.localeCompare(`${a.createdAt || ""}`))[0] || null;
-  const orderStatus = groupCounts(orders, (order) => order.status);
-  const topProducts = groupCounts(
-    orders.flatMap((order) => order.items || []),
-    (item) => item.name
-  );
-  const revenueTrend = buildTimeline(orders, (order) => Number(order.total) || 0);
+  const orderStatus = groupCounts(orders, (o) => o.status);
+  const topProducts = groupCounts(orders.flatMap((o) => o.items || []), (i) => i.name);
+  const revenueTrend = buildTimeline(orders, (o) => Number(o.total) || 0);
 
-  const paintPage = () => {
-    doc.setFillColor(9, 10, 15);
-    doc.rect(0, 0, pageWidth, pageHeight, "F");
-    doc.setFillColor(10, 132, 255);
-    doc.rect(0, 0, pageWidth, 2, "F");
-  };
-
-  const ensureSpace = (needed, currentY) => {
-    if (currentY + needed <= 276) return currentY;
-    doc.addPage();
-    paintPage();
-    return 20;
-  };
+  const paintPage = () => { doc.setFillColor(9, 10, 15); doc.rect(0, 0, pageWidth, pageHeight, "F"); doc.setFillColor(10, 132, 255); doc.rect(0, 0, pageWidth, 2, "F"); };
+  const ensureSpace = (needed, currentY) => { if (currentY + needed <= 276) return currentY; doc.addPage(); paintPage(); return 20; };
 
   paintPage();
-  doc.setTextColor(245, 245, 247);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(21);
-  doc.text("iconX Commerce Report", margin, 18);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(160, 166, 176);
-  doc.text("Cart and order performance summary", margin, 25);
-  doc.setFontSize(9);
-  doc.text(new Date().toLocaleDateString("en-GB"), pageWidth - margin, 18, { align: "right" });
-  doc.text(`Orders: ${orders.length}`, pageWidth - margin, 25, { align: "right" });
+  doc.setTextColor(245, 245, 247); doc.setFont("helvetica", "bold"); doc.setFontSize(21); doc.text("iconX Commerce Report", margin, 18);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(160, 166, 176); doc.text("Cart and order performance summary", margin, 25);
+  doc.setFontSize(9); doc.text(new Date().toLocaleDateString("en-GB"), pageWidth - margin, 18, { align: "right" }); doc.text(`Orders: ${orders.length}`, pageWidth - margin, 25, { align: "right" });
 
-  const cards = [
-    ["Orders", orders.length, [10, 132, 255]],
-    ["Revenue", fmt(totalRevenue), [48, 209, 88]],
-    ["Cart Qty", totalCartQty, [191, 90, 242]],
-    ["Pending", orders.filter((order) => String(order.status || "").toLowerCase() === "pending").length, [255, 159, 10]],
-  ];
+  const cards = [["Orders", orders.length, [10, 132, 255]], ["Revenue", fmt(totalRevenue), [48, 209, 88]], ["Cart Qty", totalCartQty, [191, 90, 242]], ["Pending", orders.filter((o) => String(o.status || "").toLowerCase() === "pending").length, [255, 159, 10]]];
   const cardWidth = (pageWidth - margin * 2 - 9) / 4;
   cards.forEach(([label, value, color], index) => {
     const x = margin + index * (cardWidth + 3);
-    doc.setFillColor(17, 19, 24);
-    doc.roundedRect(x, 30, cardWidth, 21, 2, 2, "F");
-    doc.setFillColor(...color);
-    doc.rect(x, 30, cardWidth, 1.3, "F");
-    doc.setTextColor(160, 166, 176);
-    doc.text(String(label), x + cardWidth / 2, 38, { align: "center" });
-    doc.setTextColor(245, 245, 247);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text(String(value), x + cardWidth / 2, 46, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFillColor(17, 19, 24); doc.roundedRect(x, 30, cardWidth, 21, 2, 2, "F");
+    doc.setFillColor(...color); doc.rect(x, 30, cardWidth, 1.3, "F");
+    doc.setTextColor(160, 166, 176); doc.text(String(label), x + cardWidth / 2, 38, { align: "center" });
+    doc.setTextColor(245, 245, 247); doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.text(String(value), x + cardWidth / 2, 46, { align: "center" });
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
   });
 
   let y = 59;
-  doc.setFillColor(17, 19, 24);
-  doc.roundedRect(margin, y, pageWidth - margin * 2, 28, 3, 3, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(245, 245, 247);
-  doc.text("Commerce Snapshot", margin + 4, y + 7);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(160, 166, 176);
-  doc.text(`Average order value: ${fmt(avgOrderValue)}`, margin + 4, y + 14);
-  doc.text(`Ordered item qty: ${totalOrderedItems}`, margin + 4, y + 20);
+  doc.setFillColor(17, 19, 24); doc.roundedRect(margin, y, pageWidth - margin * 2, 28, 3, 3, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(245, 245, 247); doc.text("Commerce Snapshot", margin + 4, y + 7);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(160, 166, 176);
+  doc.text(`Average order value: ${fmt(avgOrderValue)}`, margin + 4, y + 14); doc.text(`Ordered item qty: ${totalOrderedItems}`, margin + 4, y + 20);
   doc.text(`Top order: ${topOrder ? `${topOrder.id} (${fmt(topOrder.total)})` : "-"}`, pageWidth / 2 + 4, y + 14);
   doc.text(`Latest order: ${latestOrder ? formatDateTime(latestOrder.createdAt) : "-"}`, pageWidth / 2 + 4, y + 20);
 
   y += 36;
-  const addChart = (title, imgData, height = 44) => {
-    y = ensureSpace(height + 16, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(245, 245, 247);
-    doc.text(title, margin, y + 5);
-    doc.addImage(imgData, "PNG", margin, y + 8, pageWidth - margin * 2, height);
-    y += height + 14;
-  };
+  const addChart = (title, imgData, height = 44) => { y = ensureSpace(height + 16, y); doc.setFont("helvetica", "bold"); doc.setTextColor(245, 245, 247); doc.text(title, margin, y + 5); doc.addImage(imgData, "PNG", margin, y + 8, pageWidth - margin * 2, height); y += height + 14; };
+  if (topProducts.length) addChart("Top Ordered Products", buildChart("bar", { labels: topProducts.slice(0, 10).map((i) => i.label.slice(0, 12)), values: topProducts.slice(0, 10).map((i) => i.value), color: "#0a84ff", width: 540, height: 190 }));
+  if (revenueTrend.length) addChart("Revenue Trend", buildChart("area", { labels: revenueTrend.map((i) => i.label), values: revenueTrend.map((i) => i.value), color: "#30d158", width: 540, height: 190 }));
+  if (orderStatus.length) addChart("Order Status Mix", buildChart("donut", { slices: orderStatus.map((i, index) => ({ ...i, color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4] })), width: 540, height: 200 }), 48);
 
-  if (topProducts.length) {
-    addChart("Top Ordered Products", buildChart("bar", {
-      labels: topProducts.slice(0, 10).map((item) => item.label.slice(0, 12)),
-      values: topProducts.slice(0, 10).map((item) => item.value),
-      color: "#0a84ff",
-      width: 540,
-      height: 190,
-    }));
-  }
+  y = ensureSpace(18, y); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(245, 245, 247); doc.text("Recent Orders", margin, y + 5); y += 8;
+  autoTable(doc, { startY: y, head: [["Order ID", "Customer", "Items", "Total", "Status", "Created"]], body: orders.slice(0, 20).map((o) => [o.id, o.customer?.fullName || "-", (o.items || []).reduce((s, i) => s + (i.quantity || 1), 0), fmt(o.total), o.status || "-", formatDateTime(o.createdAt)]), theme: "plain", headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8.5, fontStyle: "bold", cellPadding: 2.8 }, bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8.2, cellPadding: 2.8 }, alternateRowStyles: { fillColor: [17, 19, 24] }, didParseCell: (data) => { if (data.section === "body" && data.column.index === 4) { const s = String(data.cell.raw || "").toLowerCase(); data.cell.styles.textColor = s === "delivered" ? [48, 209, 88] : s === "pending" ? [255, 159, 10] : s === "cancelled" ? [255, 69, 58] : [10, 132, 255]; data.cell.styles.fontStyle = "bold"; } }, margin: { left: margin, right: margin } });
 
-  if (revenueTrend.length) {
-    addChart("Revenue Trend", buildChart("area", {
-      labels: revenueTrend.map((item) => item.label),
-      values: revenueTrend.map((item) => item.value),
-      color: "#30d158",
-      width: 540,
-      height: 190,
-    }));
-  }
-
-  if (orderStatus.length) {
-    addChart("Order Status Mix", buildChart("donut", {
-      slices: orderStatus.map((item, index) => ({
-        ...item,
-        color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4],
-      })),
-      width: 540,
-      height: 200,
-    }), 48);
-  }
-
-  y = ensureSpace(18, y);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(245, 245, 247);
-  doc.text("Recent Orders", margin, y + 5);
-  y += 8;
-
-  autoTable(doc, {
-    startY: y,
-    head: [["Order ID", "Customer", "Items", "Total", "Status", "Created"]],
-    body: orders.slice(0, 20).map((order) => [
-      order.id,
-      order.customer?.fullName || "-",
-      (order.items || []).reduce((sum, item) => sum + (item.quantity || 1), 0),
-      fmt(order.total),
-      order.status || "-",
-      formatDateTime(order.createdAt),
-    ]),
-    theme: "plain",
-    headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8.5, fontStyle: "bold", cellPadding: 2.8 },
-    bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8.2, cellPadding: 2.8 },
-    alternateRowStyles: { fillColor: [17, 19, 24] },
-    didParseCell: (data) => {
-      if (data.section === "body" && data.column.index === 4) {
-        const status = String(data.cell.raw || "").toLowerCase();
-        data.cell.styles.textColor = status === "delivered"
-          ? [48, 209, 88]
-          : status === "pending"
-            ? [255, 159, 10]
-            : status === "cancelled"
-              ? [255, 69, 58]
-              : [10, 132, 255];
-        data.cell.styles.fontStyle = "bold";
-      }
-    },
-    margin: { left: margin, right: margin },
-  });
-
-  let cartStartY = doc.lastAutoTable.finalY + 10;
-  cartStartY = ensureSpace(22, cartStartY);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(245, 245, 247);
-  doc.text("Live Cart Snapshot", margin, cartStartY + 5);
-
-  autoTable(doc, {
-    startY: cartStartY + 8,
-    head: [["Cart Item", "Price", "Qty", "Subtotal"]],
-    body: cartItems.map((item) => [
-      item.name || "-",
-      fmt(item.price),
-      item.quantity || 1,
-      fmt((Number(item.price) || 0) * (item.quantity || 1)),
-    ]),
-    theme: "plain",
-    headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8.5, fontStyle: "bold", cellPadding: 2.8 },
-    bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8.2, cellPadding: 2.8 },
-    alternateRowStyles: { fillColor: [17, 19, 24] },
-    margin: { left: margin, right: margin },
-  });
+  let cartStartY = doc.lastAutoTable.finalY + 10; cartStartY = ensureSpace(22, cartStartY);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(245, 245, 247); doc.text("Live Cart Snapshot", margin, cartStartY + 5);
+  autoTable(doc, { startY: cartStartY + 8, head: [["Cart Item", "Price", "Qty", "Subtotal"]], body: cartItems.map((i) => [i.name || "-", fmt(i.price), i.quantity || 1, fmt((Number(i.price) || 0) * (i.quantity || 1))]), theme: "plain", headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8.5, fontStyle: "bold", cellPadding: 2.8 }, bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8.2, cellPadding: 2.8 }, alternateRowStyles: { fillColor: [17, 19, 24] }, margin: { left: margin, right: margin } });
 
   const totalPages = doc.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFillColor(9, 10, 15);
-    doc.rect(0, 285, pageWidth, 12, "F");
-    doc.setFillColor(10, 132, 255);
-    doc.rect(0, 295, pageWidth, 2, "F");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(160, 166, 176);
-    doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, 291, { align: "center" });
-    doc.text("iconX Commerce Admin", margin, 291);
-  }
-
+  for (let i = 1; i <= totalPages; i++) { doc.setPage(i); doc.setFillColor(9, 10, 15); doc.rect(0, 285, pageWidth, 12, "F"); doc.setFillColor(10, 132, 255); doc.rect(0, 295, pageWidth, 2, "F"); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(160, 166, 176); doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, 291, { align: "center" }); doc.text("iconX Commerce Admin", margin, 291); }
   doc.save("iconX_commerce_report.pdf");
 }
 
+/* ─── COMMERCE PANEL (UPDATED) ─────────────────────────────── */
 function CommercePanel({ search }) {
   const [orders, setOrders] = useState([]);
   const [cartItems, setCartItems] = useState([]);
   const [busy, setBusy] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
-    const syncCart = () => {
-      setCartItems(JSON.parse(localStorage.getItem("cart")) || []);
-    };
-
+    const syncCart = () => setCartItems(JSON.parse(localStorage.getItem('cart')) || []);
     syncCart();
     window.addEventListener(CART_EVENT, syncCart);
-    window.addEventListener("storage", syncCart);
-
-    const unsub = onSnapshot(
-      collection(db, "orders"),
-      (snapshot) => {
-        setOrders(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })));
-        setBusy(false);
-      }
-    );
-
+    window.addEventListener('storage', syncCart);
+    const unsub = onSnapshot(collection(db, 'orders'), (snapshot) => {
+      setOrders(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setBusy(false);
+    });
     return () => {
       window.removeEventListener(CART_EVENT, syncCart);
-      window.removeEventListener("storage", syncCart);
+      window.removeEventListener('storage', syncCart);
       unsub();
     };
   }, []);
 
-  /* =========================
-     CART CRUD
-  ========================= */
-
   const updateCartQty = (id, qty) => {
-    let cart = JSON.parse(localStorage.getItem("cart")) || [];
-
-    cart = cart.map(item =>
+    if (qty < 1) return;
+    const cart = (JSON.parse(localStorage.getItem('cart')) || []).map((item) =>
       item.id === id ? { ...item, quantity: qty } : item
     );
-
-    localStorage.setItem("cart", JSON.stringify(cart));
+    localStorage.setItem('cart', JSON.stringify(cart));
     window.dispatchEvent(new Event(CART_EVENT));
   };
 
   const deleteCartItem = (id) => {
-    let cart = JSON.parse(localStorage.getItem("cart")) || [];
-
-    cart = cart.filter(item => item.id !== id);
-
-    localStorage.setItem("cart", JSON.stringify(cart));
+    const cart = (JSON.parse(localStorage.getItem('cart')) || []).filter((item) => item.id !== id);
+    localStorage.setItem('cart', JSON.stringify(cart));
     window.dispatchEvent(new Event(CART_EVENT));
   };
 
-  /* =========================
-     ORDER CRUD
-  ========================= */
-
   const updateOrderStatus = async (id, status) => {
-    await updateDoc(doc(db, "orders", id), { status });
+    await updateDoc(doc(db, 'orders', id), { status });
   };
 
   const deleteOrder = async (id) => {
-    await deleteDoc(doc(db, "orders", id));
+    await deleteDoc(doc(db, 'orders', id));
   };
 
-  const filteredOrders = orders.filter((order) =>
-    JSON.stringify(order).toLowerCase().includes((search || "").toLowerCase())
-  );
+  const STATUS_FILTERS = ['all', 'pending', 'approved', 'delivered', 'cancelled'];
+
+  const filteredOrders = orders.filter((o) => {
+    const matchSearch = JSON.stringify(o).toLowerCase().includes((search || '').toLowerCase());
+    const matchStatus = statusFilter === 'all' || String(o.status || '').toLowerCase() === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const totalRevenue = orders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const pendingCount = orders.filter((o) => String(o.status || '').toLowerCase() === 'pending').length;
+  const cartQty = cartItems.reduce((s, i) => s + (i.quantity || 1), 0);
+  const cartTotal = cartItems.reduce((s, i) => s + (Number(i.price) || 0) * (i.quantity || 1), 0);
+
+  const orderBadgeClass = (s) => {
+    const lower = String(s || '').toLowerCase();
+    if (lower === 'delivered') return 'optimal';
+    if (lower === 'approved') return 'info';
+    if (lower === 'cancelled') return 'critical';
+    return 'stable';
+  };
+
+  const orderIcon = (s) => {
+    const lower = String(s || '').toLowerCase();
+    if (lower === 'delivered') return '✓';
+    if (lower === 'cancelled') return '✕';
+    if (lower === 'approved') return '✓';
+    return '⏳';
+  };
+
+  const exportOrdersCsv = () => {
+    const rows = [
+      ['Order ID', 'Customer', 'Items', 'Total', 'Status', 'Created'],
+      ...orders.map((o) => [o.id, o.customer?.fullName || '-', (o.items || []).length, o.total, o.status, formatDateTime(o.createdAt)]),
+    ];
+    const csv = rows.map((r) => r.join(',')).join('\n');
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: 'orders.csv' });
+    a.click(); URL.revokeObjectURL(a.href);
+  };
 
   return (
-    <div className="ap-grid-2">
-
-      {/* ORDERS TABLE */}
-      <div className="ap-panel">
-        <div className="ap-panel-title">Orders</div>
-
-        <table className="ap-table">
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Items</th>
-              <th>Total</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {filteredOrders.map((order) => (
-              <tr key={order.id}>
-                <td>{order.customer?.fullName || "-"}</td>
-                <td>{(order.items || []).length}</td>
-                <td>{order.total}</td>
-
-                <td>{order.status}</td>
-
-                <td>
-                  <button onClick={() => updateOrderStatus(order.id, "approved")}>✔</button>
-                  <button onClick={() => updateOrderStatus(order.id, "rejected")}>✖</button>
-                  <button onClick={() => deleteOrder(order.id)}>🗑</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <>
+      {/* ── KPI Cards ── */}
+      <div className="ap-grid-4">
+        {[
+          { color: 'blue',   icon: '🛒', label: 'Total Orders',   val: orders.length,      sub: 'across all statuses' },
+          { color: 'green',  icon: '💰', label: 'Total Revenue',  val: fmt(totalRevenue),  sub: 'from all orders', small: true },
+          { color: 'amber',  icon: '⏳', label: 'Pending',        val: pendingCount,        sub: 'awaiting approval' },
+          { color: 'purple', icon: '🛍', label: 'Cart Items',     val: cartQty,             sub: fmt(cartTotal) + ' total' },
+        ].map((k, i) => (
+          <div key={i} className={`ap-stat-card ${k.color}`}>
+            <div className={`ap-stat-icon ${k.color}`}>{k.icon}</div>
+            <div className="ap-stat-label">{k.label}</div>
+            <div className="ap-stat-value" style={{
+              color: ['', 'var(--green)', 'var(--amber)', 'var(--purple)'][i] || undefined,
+              fontSize: k.small ? 17 : undefined,
+            }}>{k.val}</div>
+            <div className="ap-stat-sub">{k.sub}</div>
+          </div>
+        ))}
       </div>
 
-      {/* CART TABLE */}
-      <div className="ap-panel">
-        <div className="ap-panel-title">Cart</div>
-
-        <table className="ap-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Qty</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {cartItems.map((item) => (
-              <tr key={item.id}>
-                <td>{item.name}</td>
-
-                <td>
-                  <button onClick={() => updateCartQty(item.id, (item.quantity || 1) - 1)}>-</button>
-                  {item.quantity || 1}
-                  <button onClick={() => updateCartQty(item.id, (item.quantity || 1) + 1)}>+</button>
-                </td>
-
-                <td>
-                  <button onClick={() => deleteCartItem(item.id)}>Remove</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* ── Filter bar ── */}
+      <div className="ap-filter-bar">
+        {STATUS_FILTERS.map((f) => (
+          <button
+            key={f}
+            className={`ap-filter-btn ${statusFilter === f ? 'active' : ''}`}
+            onClick={() => setStatusFilter(f)}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+            {' '}({f === 'all' ? orders.length : orders.filter((o) => String(o.status || '').toLowerCase() === f).length})
+          </button>
+        ))}
+        <div className="ap-filter-spacer" />
+        <button className="ap-export-btn pdf" onClick={() => exportCommercePdf(orders, cartItems)}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export PDF
+        </button>
+        <button className="ap-export-btn excel" onClick={exportOrdersCsv}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
       </div>
 
-    </div>
+      {/* ── Orders + Cart side by side ── */}
+      <div className="ap-grid-2">
+
+        {/* Orders Table */}
+        <div className="ap-panel">
+          <div className="ap-panel-title">
+            Orders
+            <span className="ap-panel-sub">{filteredOrders.length} record{filteredOrders.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="ap-table-wrap">
+            <table className="ap-table">
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Customer</th>
+                  <th>Items</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {busy && (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: 28, color: 'var(--muted)' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite', display: 'inline-block', marginRight: 8 }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    Loading orders…
+                  </td></tr>
+                )}
+                {!busy && filteredOrders.map((order) => (
+                  <tr key={order.id} className="data-row">
+                    <td style={{ fontFamily: 'var(--syne)', fontWeight: 700, fontSize: 11, color: 'var(--muted)', letterSpacing: '0.3px' }}>
+                      #{String(order.id).slice(-6).toUpperCase()}
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{order.customer?.fullName || '—'}</td>
+                    <td style={{ color: 'var(--muted)' }}>
+                      {(order.items || []).reduce((s, i) => s + (i.quantity || 1), 0)} items
+                    </td>
+                    <td style={{ fontFamily: 'var(--syne)', fontWeight: 700, color: 'var(--green)' }}>
+                      {fmt(order.total)}
+                    </td>
+                    <td>
+                      <span className={`ap-badge ${orderBadgeClass(order.status)}`}>
+                        {orderIcon(order.status)} {order.status || 'Pending'}
+                      </span>
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="ap-action-btn success"
+                        title="Approve order"
+                        onClick={() => updateOrderStatus(order.id, 'approved')}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        Approve
+                      </button>
+                      <button
+                        className="ap-action-btn"
+                        title="Mark as delivered"
+                        onClick={() => updateOrderStatus(order.id, 'delivered')}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        Deliver
+                      </button>
+                      <button
+                        className="ap-action-btn del"
+                        title="Delete order"
+                        onClick={() => deleteOrder(order.id)}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {!busy && filteredOrders.length === 0 && (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: 36, color: 'var(--muted)' }}>
+                    <div style={{ fontSize: 28, opacity: .2, marginBottom: 8 }}>🛒</div>
+                    No orders match this filter
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Live Cart */}
+        <div className="ap-panel">
+          <div className="ap-panel-title">
+            Live Cart
+            <span className="ap-panel-sub">{cartQty} item{cartQty !== 1 ? 's' : ''} · {fmt(cartTotal)}</span>
+          </div>
+
+          {cartItems.length === 0 ? (
+            <div className="ap-cart-empty">
+              <div className="ap-cart-empty-icon">🛒</div>
+              <div style={{ fontFamily: 'var(--syne)', fontWeight: 600, marginBottom: 4 }}>Cart is empty</div>
+              <div style={{ fontSize: 12 }}>Items added from the storefront will appear here</div>
+            </div>
+          ) : (
+            <>
+              {cartItems.map((item) => (
+                <div key={item.id} className="ap-cart-item">
+                  <div className="ap-cart-thumb">📱</div>
+                  <div className="ap-cart-info">
+                    <div className="ap-cart-name">{item.name}</div>
+                    <div className="ap-cart-price">{fmt(item.price)} each</div>
+                  </div>
+                  <div className="ap-qty-ctrl">
+                    <button className="ap-qty-btn" onClick={() => updateCartQty(item.id, (item.quantity || 1) - 1)}>−</button>
+                    <span className="ap-qty-val">{item.quantity || 1}</span>
+                    <button className="ap-qty-btn" onClick={() => updateCartQty(item.id, (item.quantity || 1) + 1)}>+</button>
+                  </div>
+                  <button
+                    className="ap-action-btn del"
+                    style={{ marginLeft: 6, padding: '4px 8px' }}
+                    onClick={() => deleteCartItem(item.id)}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
+                </div>
+              ))}
+              <div className="ap-cart-total-row">
+                <span className="ap-cart-total-label">Cart Total</span>
+                <span className="ap-cart-total-val">{fmt(cartTotal)}</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
+
+/* ─── TRADE-IN PANEL ───────────────────────────────────────── */
 function exportTradeInPdf(items) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageWidth = 210;
-  const margin = 14;
+  const pageWidth = 210, margin = 14;
   const mobileOnly = items.filter(isMobileTradeIn);
   const brandMix = groupCounts(mobileOnly, (item) => item.brand);
-  const statusMix = groupCounts(mobileOnly, (item) => item.status).map((item, index) => ({
-    ...item,
-    color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4],
-  }));
+  const statusMix = groupCounts(mobileOnly, (item) => item.status).map((item, index) => ({ ...item, color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4] }));
   const estimateTrend = buildTimeline(mobileOnly, (item) => getTradeInValue(item));
 
-  doc.setFillColor(9, 10, 15);
-  doc.rect(0, 0, pageWidth, 297, "F");
-  doc.setFillColor(10, 132, 255);
-  doc.rect(0, 0, pageWidth, 2, "F");
-  doc.setTextColor(245, 245, 247);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("Mobile Trade-In Report", margin, 18);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(160, 166, 176);
-  doc.text(new Date().toLocaleDateString("en-GB"), pageWidth - margin, 18, { align: "right" });
+  doc.setFillColor(9, 10, 15); doc.rect(0, 0, pageWidth, 297, "F"); doc.setFillColor(10, 132, 255); doc.rect(0, 0, pageWidth, 2, "F");
+  doc.setTextColor(245, 245, 247); doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.text("Mobile Trade-In Report", margin, 18);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(160, 166, 176); doc.text(new Date().toLocaleDateString("en-GB"), pageWidth - margin, 18, { align: "right" });
 
-  const cards = [
-    ["Mobile Leads", mobileOnly.length],
-    ["Avg Estimate", fmt(mobileOnly.length ? Math.round(mobileOnly.reduce((sum, item) => sum + getTradeInValue(item), 0) / mobileOnly.length) : 0)],
-    ["Pending", mobileOnly.filter((item) => String(item.status || "").toLowerCase() === "pending").length],
-    ["Brands", new Set(mobileOnly.map((item) => item.brand || "Unknown")).size],
-  ];
+  const cards = [["Mobile Leads", mobileOnly.length], ["Avg Estimate", fmt(mobileOnly.length ? Math.round(mobileOnly.reduce((s, i) => s + getTradeInValue(i), 0) / mobileOnly.length) : 0)], ["Pending", mobileOnly.filter((i) => String(i.status || "").toLowerCase() === "pending").length], ["Brands", new Set(mobileOnly.map((i) => i.brand || "Unknown")).size]];
   const cardWidth = (pageWidth - margin * 2 - 9) / 4;
   cards.forEach(([label, value], index) => {
     const x = margin + index * (cardWidth + 3);
-    doc.setFillColor(17, 19, 24);
-    doc.roundedRect(x, 28, cardWidth, 20, 2, 2, "F");
-    doc.setTextColor(160, 166, 176);
-    doc.text(String(label), x + 4, 36);
-    doc.setTextColor(245, 245, 247);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text(String(value), x + 4, 44);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFillColor(17, 19, 24); doc.roundedRect(x, 28, cardWidth, 20, 2, 2, "F");
+    doc.setTextColor(160, 166, 176); doc.text(String(label), x + 4, 36);
+    doc.setTextColor(245, 245, 247); doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.text(String(value), x + 4, 44);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
   });
 
-  doc.text("Brand Mix", margin, 60);
-  doc.addImage(buildChart("bar", {
-    labels: brandMix.map((item) => item.label.slice(0, 10)),
-    values: brandMix.map((item) => item.value),
-    color: "#0a84ff",
-    width: 540,
-    height: 190,
-  }), "PNG", margin, 64, pageWidth - margin * 2, 44);
+  doc.text("Brand Mix", margin, 60); doc.addImage(buildChart("bar", { labels: brandMix.map((i) => i.label.slice(0, 10)), values: brandMix.map((i) => i.value), color: "#0a84ff", width: 540, height: 190 }), "PNG", margin, 64, pageWidth - margin * 2, 44);
+  doc.text("Estimate Trend", margin, 116); doc.addImage(buildChart("area", { labels: estimateTrend.map((i) => i.label), values: estimateTrend.map((i) => i.value), color: "#30d158", width: 540, height: 190 }), "PNG", margin, 120, pageWidth - margin * 2, 44);
+  if (statusMix.length) { doc.text("Status Mix", margin, 176); doc.addImage(buildChart("donut", { slices: statusMix, width: 540, height: 200 }), "PNG", margin, 180, pageWidth - margin * 2, 48); }
 
-  doc.text("Estimate Trend", margin, 116);
-  doc.addImage(buildChart("area", {
-    labels: estimateTrend.map((item) => item.label),
-    values: estimateTrend.map((item) => item.value),
-    color: "#30d158",
-    width: 540,
-    height: 190,
-  }), "PNG", margin, 120, pageWidth - margin * 2, 44);
-
-  if (statusMix.length) {
-    doc.text("Status Mix", margin, 176);
-    doc.addImage(buildChart("donut", {
-      slices: statusMix,
-      width: 540,
-      height: 200,
-    }), "PNG", margin, 180, pageWidth - margin * 2, 48);
-  }
-
-  doc.addPage();
-  doc.setFillColor(9, 10, 15);
-  doc.rect(0, 0, pageWidth, 297, "F");
-  autoTable(doc, {
-    startY: 16,
-    head: [["Customer", "Phone", "Brand", "Model", "IMEI", "Estimate", "Status", "Created"]],
-    body: mobileOnly.map((item) => [
-      getTradeInCustomerName(item),
-      getTradeInPhone(item),
-      item.brand || "—",
-      getTradeInModel(item),
-      getTradeInImei(item),
-      fmt(getTradeInValue(item)),
-      item.status || "—",
-      formatDateTime(item.createdAt),
-    ]),
-    theme: "plain",
-    headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8 },
-    bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8 },
-    alternateRowStyles: { fillColor: [17, 19, 24] },
-    margin: { left: margin, right: margin },
-  });
-
+  doc.addPage(); doc.setFillColor(9, 10, 15); doc.rect(0, 0, pageWidth, 297, "F");
+  autoTable(doc, { startY: 16, head: [["Customer", "Phone", "Brand", "Model", "IMEI", "Estimate", "Status", "Created"]], body: mobileOnly.map((i) => [getTradeInCustomerName(i), getTradeInPhone(i), i.brand || "—", getTradeInModel(i), getTradeInImei(i), fmt(getTradeInValue(i)), i.status || "—", formatDateTime(i.createdAt)]), theme: "plain", headStyles: { fillColor: [17, 19, 24], textColor: [160, 166, 176], fontSize: 8 }, bodyStyles: { fillColor: [9, 10, 15], textColor: [245, 245, 247], fontSize: 8 }, alternateRowStyles: { fillColor: [17, 19, 24] }, margin: { left: margin, right: margin } });
   doc.save("mobile_trade_in_report.pdf");
 }
+
 function TradeInPanel({ search }) {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(true);
@@ -2707,324 +2107,93 @@ function TradeInPanel({ search }) {
   const [editItem, setEditItem] = useState(null);
 
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, "tradeIns"),
-      (snapshot) => {
-        setItems(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })));
-        setBusy(false);
-      },
-      (error) => {
-        console.error("Failed loading trade-ins:", error);
-        setItems([]);
-        setBusy(false);
-      }
-    );
-
+    const unsub = onSnapshot(collection(db, "tradeIns"), (snapshot) => { setItems(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))); setBusy(false); }, (error) => { console.error("Failed loading trade-ins:", error); setItems([]); setBusy(false); });
     return unsub;
   }, []);
 
   const handleUpdateTrade = async (id, data) => {
     try {
-      await updateDoc(doc(db, "tradeIns", id), {
-        customerName: data.customerName || "",
-        phone: data.phone || "",
-        brand: data.brand || "",
-        model: data.model || "",
-        imei: data.imei || "",
-        storage: data.storage || "",
-        estimatedValue: Number(data.estimatedValue) || 0,
-        status: data.status || "Pending",
-        notes: data.notes || "",
-        updatedAt: serverTimestamp(),
-      });
-
-      setEditItem(null);
-      alert("Mobile trade-in updated successfully.");
-    } catch (error) {
-      console.error("Update failed:", error);
-      alert("Failed to update mobile trade-in.");
-    }
+      await updateDoc(doc(db, "tradeIns", id), { customerName: data.customerName || "", phone: data.phone || "", brand: data.brand || "", model: data.model || "", imei: data.imei || "", storage: data.storage || "", estimatedValue: Number(data.estimatedValue) || 0, status: data.status || "Pending", notes: data.notes || "", updatedAt: serverTimestamp() });
+      setEditItem(null); alert("Mobile trade-in updated successfully.");
+    } catch (error) { console.error("Update failed:", error); alert("Failed to update mobile trade-in."); }
   };
 
   const handleDeleteTrade = async (id) => {
     if (!window.confirm("Are you sure you want to delete this mobile trade-in request?")) return;
-
-    try {
-      await deleteDoc(doc(db, "tradeIns", id));
-      alert("Mobile trade-in deleted successfully.");
-    } catch (error) {
-      console.error("Delete failed:", error);
-      alert("Failed to delete mobile trade-in.");
-    }
+    try { await deleteDoc(doc(db, "tradeIns", id)); alert("Mobile trade-in deleted successfully."); }
+    catch (error) { console.error("Delete failed:", error); alert("Failed to delete mobile trade-in."); }
   };
 
-  const filtered = items.filter((item) =>
-    JSON.stringify(item).toLowerCase().includes((search || "").toLowerCase())
-  );
-
+  const filtered = items.filter((item) => JSON.stringify(item).toLowerCase().includes((search || "").toLowerCase()));
   const mobileOnly = filtered.filter(isMobileTradeIn);
-
-  const avgEstimate = mobileOnly.length
-    ? Math.round(
-        mobileOnly.reduce((sum, item) => sum + getTradeInValue(item), 0) /
-          mobileOnly.length
-      )
-    : 0;
-
+  const avgEstimate = mobileOnly.length ? Math.round(mobileOnly.reduce((s, i) => s + getTradeInValue(i), 0) / mobileOnly.length) : 0;
   const brandMix = groupCounts(mobileOnly, (item) => item.brand);
-
-  const statusMix = groupCounts(mobileOnly, (item) => item.status).map((item, index) => ({
-    ...item,
-    color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4],
-  }));
-
+  const statusMix = groupCounts(mobileOnly, (item) => item.status).map((item, index) => ({ ...item, color: ["#0a84ff", "#30d158", "#ff9f0a", "#ff453a"][index % 4] }));
   const estimateTrend = buildTimeline(mobileOnly, (item) => getTradeInValue(item));
 
   return (
     <>
       <div className="ap-filter-bar">
-        <div>
-          <div className="ap-settings-title">Mobile Trade-In</div>
-          <div className="ap-settings-sub">
-            Visual report for mobile trade-in requests saved from the trade-in calculator.
-          </div>
-        </div>
-
+        <div><div className="ap-settings-title">Mobile Trade-In</div><div className="ap-settings-sub">Visual report for mobile trade-in requests saved from the trade-in calculator.</div></div>
         <div className="ap-filter-spacer" />
-
-        <button className="ap-export-btn pdf" onClick={() => exportTradeInPdf(filtered)}>
-          Export Trade-In PDF
-        </button>
+        <button className="ap-export-btn pdf" onClick={() => exportTradeInPdf(filtered)}>Export Trade-In PDF</button>
       </div>
-
       <div className="ap-grid-4">
-        <div className="ap-stat-card blue">
-          <div className="ap-stat-icon blue">M</div>
-          <div className="ap-stat-label">Mobile Leads</div>
-          <div className="ap-stat-value">{mobileOnly.length}</div>
-          <div className="ap-stat-sub">Smartphone trade-ins in current view</div>
-        </div>
-
-        <div className="ap-stat-card green">
-          <div className="ap-stat-icon green">A</div>
-          <div className="ap-stat-label">Avg Estimate</div>
-          <div className="ap-stat-value" style={{ color: "var(--green)" }}>
-            {fmt(avgEstimate)}
-          </div>
-          <div className="ap-stat-sub">Average expected value</div>
-        </div>
-
-        <div className="ap-stat-card amber">
-          <div className="ap-stat-icon amber">P</div>
-          <div className="ap-stat-label">Pending Requests</div>
-          <div className="ap-stat-value" style={{ color: "var(--amber)" }}>
-            {
-              mobileOnly.filter(
-                (item) => String(item.status || "").toLowerCase() === "pending"
-              ).length
-            }
-          </div>
-          <div className="ap-stat-sub">Awaiting staff follow-up</div>
-        </div>
-
-        <div className="ap-stat-card purple">
-          <div className="ap-stat-icon purple">B</div>
-          <div className="ap-stat-label">Brands</div>
-          <div className="ap-stat-value" style={{ color: "var(--purple)" }}>
-            {new Set(mobileOnly.map((item) => item.brand || "Unknown")).size}
-          </div>
-          <div className="ap-stat-sub">Distinct mobile brands</div>
-        </div>
+        <div className="ap-stat-card blue"><div className="ap-stat-icon blue">M</div><div className="ap-stat-label">Mobile Leads</div><div className="ap-stat-value">{mobileOnly.length}</div><div className="ap-stat-sub">Smartphone trade-ins in current view</div></div>
+        <div className="ap-stat-card green"><div className="ap-stat-icon green">A</div><div className="ap-stat-label">Avg Estimate</div><div className="ap-stat-value" style={{ color: "var(--green)", fontSize: 18 }}>{fmt(avgEstimate)}</div><div className="ap-stat-sub">Average expected value</div></div>
+        <div className="ap-stat-card amber"><div className="ap-stat-icon amber">P</div><div className="ap-stat-label">Pending Requests</div><div className="ap-stat-value" style={{ color: "var(--amber)" }}>{mobileOnly.filter((i) => String(i.status || "").toLowerCase() === "pending").length}</div><div className="ap-stat-sub">Awaiting staff follow-up</div></div>
+        <div className="ap-stat-card purple"><div className="ap-stat-icon purple">B</div><div className="ap-stat-label">Brands</div><div className="ap-stat-value" style={{ color: "var(--purple)" }}>{new Set(mobileOnly.map((i) => i.brand || "Unknown")).size}</div><div className="ap-stat-sub">Distinct mobile brands</div></div>
       </div>
-
       <div className="ap-grid-2">
         <div className="ap-panel">
-          <div className="ap-panel-title">
-            Brand Demand <span className="ap-panel-sub">Saved mobile trade-ins</span>
-          </div>
-
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={brandMix.map((item) => ({ name: item.label, value: item.value }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} />
-              <YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} />
-              <Tooltip content={<Tip />} />
-              <Bar dataKey="value" fill="#0a84ff" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="ap-panel-title">Brand Demand <span className="ap-panel-sub">Saved mobile trade-ins</span></div>
+          <ResponsiveContainer width="100%" height={220}><BarChart data={brandMix.map((i) => ({ name: i.label, value: i.value }))}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" /><XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} /><YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} /><Tooltip content={<Tip />} /><Bar dataKey="value" fill="#0a84ff" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
         </div>
-
         <div className="ap-panel">
-          <div className="ap-panel-title">
-            Status Breakdown <span className="ap-panel-sub">Trade-in pipeline health</span>
-          </div>
-
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={statusMix}
-                dataKey="value"
-                nameKey="label"
-                innerRadius={50}
-                outerRadius={80}
-                paddingAngle={2}
-              >
-                {statusMix.map((item) => (
-                  <Cell key={item.label} fill={item.color} />
-                ))}
-              </Pie>
-              <Tooltip content={<Tip />} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
+          <div className="ap-panel-title">Status Breakdown <span className="ap-panel-sub">Trade-in pipeline health</span></div>
+          <ResponsiveContainer width="100%" height={220}><PieChart><Pie data={statusMix} dataKey="value" nameKey="label" innerRadius={50} outerRadius={80} paddingAngle={2}>{statusMix.map((i) => <Cell key={i.label} fill={i.color} />)}</Pie><Tooltip content={<Tip />} /><Legend /></PieChart></ResponsiveContainer>
         </div>
       </div>
-
       <div className="ap-panel" style={{ marginBottom: 16 }}>
-        <div className="ap-panel-title">
-          Estimate Trend <span className="ap-panel-sub">Recent mobile valuation movement</span>
-        </div>
-
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={estimateTrend.map((item) => ({ name: item.label, value: item.value }))}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} />
-            <YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} />
-            <Tooltip content={<Tip />} />
-            <Area
-              type="monotone"
-              dataKey="value"
-              stroke="#30d158"
-              fill="rgba(48,209,88,0.25)"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        <div className="ap-panel-title">Estimate Trend <span className="ap-panel-sub">Recent mobile valuation movement</span></div>
+        <ResponsiveContainer width="100%" height={220}><AreaChart data={estimateTrend.map((i) => ({ name: i.label, value: i.value }))}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" /><XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6e6e73" }} /><YAxis tick={{ fontSize: 10, fill: "#6e6e73" }} /><Tooltip content={<Tip />} /><Area type="monotone" dataKey="value" stroke="#30d158" fill="rgba(48,209,88,0.25)" /></AreaChart></ResponsiveContainer>
       </div>
-
       <div className="ap-panel">
-        <div className="ap-panel-title">
-          Mobile Trade-In Requests{" "}
-          <span className="ap-panel-sub">
-            {busy ? "Loading." : `${mobileOnly.length} mobile entries`}
-          </span>
-        </div>
-
+        <div className="ap-panel-title">Mobile Trade-In Requests <span className="ap-panel-sub">{busy ? "Loading…" : `${mobileOnly.length} mobile entries`}</span></div>
         <div className="ap-table-wrap">
           <table className="ap-table">
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th>Phone</th>
-                <th>Brand</th>
-                <th>Model</th>
-                <th>IMEI</th>
-                <th>Storage</th>
-                <th>Estimate</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-
+            <thead><tr><th>Customer</th><th>Phone</th><th>Brand</th><th>Model</th><th>IMEI</th><th>Storage</th><th>Estimate</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
             <tbody>
-              {busy && (
-                <tr>
-                  <td colSpan={10} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
-                    Loading trade-in requests.
+              {busy && <tr><td colSpan={10} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>Loading trade-in requests.</td></tr>}
+              {!busy && mobileOnly.map((item) => (
+                <tr key={item.id} className="data-row">
+                  <td>{getTradeInCustomerName(item)}</td><td>{getTradeInPhone(item)}</td><td>{item.brand || "—"}</td><td>{getTradeInModel(item)}</td><td>{getTradeInImei(item)}</td><td>{getTradeInStorage(item)}</td><td>{fmt(getTradeInValue(item))}</td><td>{item.status || "Pending"}</td><td>{formatDateTime(item.createdAt)}</td>
+                  <td>
+                    <button className="ap-action-btn" onClick={() => setViewItem(item)}>Read</button>
+                    <button className="ap-action-btn" onClick={() => setEditItem(item)}>Update</button>
+                    <button className="ap-action-btn del" onClick={() => handleDeleteTrade(item.id)}>Delete</button>
                   </td>
-                </tr>
-              )}
-
-              {!busy &&
-                mobileOnly.map((item) => (
-                  <tr key={item.id} className="data-row">
-                    <td>{getTradeInCustomerName(item)}</td>
-                    <td>{getTradeInPhone(item)}</td>
-                    <td>{item.brand || "—"}</td>
-                    <td>{getTradeInModel(item)}</td>
-                    <td>{getTradeInImei(item)}</td>
-                    <td>{getTradeInStorage(item)}</td>
-                    <td>{fmt(getTradeInValue(item))}</td>
-                    <td>{item.status || "Pending"}</td>
-                    <td>{formatDateTime(item.createdAt)}</td>
-                    <td>
-                      <button className="ap-action-btn" onClick={() => setViewItem(item)}>
-                        Read
-                      </button>
-
-                      <button className="ap-action-btn" onClick={() => setEditItem(item)}>
-                        Update
-                      </button>
-
-                      <button className="ap-action-btn del" onClick={() => handleDeleteTrade(item.id)}>
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-
-              {!busy && mobileOnly.length === 0 && (
-                <tr>
-                  <td colSpan={10} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
-                    No mobile trade-in requests found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="ap-panel" style={{ marginTop: 16 }}>
-        <div className="ap-panel-title">
-          Condition Summary{" "}
-          <span className="ap-panel-sub">Submitted exactly from the trade-in form</span>
-        </div>
-
-        <div className="ap-table-wrap">
-          <table className="ap-table">
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th>Model</th>
-                <th>Condition Details</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {mobileOnly.map((item) => (
-                <tr key={`${item.id}-condition`} className="data-row">
-                  <td>{getTradeInCustomerName(item)}</td>
-                  <td>{getTradeInModel(item)}</td>
-                  <td>{getTradeInConditionSummary(item)}</td>
-                  <td>{item.notes || "—"}</td>
                 </tr>
               ))}
-
-              {mobileOnly.length === 0 && (
-                <tr>
-                  <td colSpan={4} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
-                    No condition details found
-                  </td>
-                </tr>
-              )}
+              {!busy && mobileOnly.length === 0 && <tr><td colSpan={10} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>No mobile trade-in requests found</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
-
-      {viewItem && (
-        <TradeInReadModal item={viewItem} onClose={() => setViewItem(null)} />
-      )}
-
-      {editItem && (
-        <TradeInUpdateModal
-          item={editItem}
-          onClose={() => setEditItem(null)}
-          onSave={handleUpdateTrade}
-        />
-      )}
+      <div className="ap-panel" style={{ marginTop: 16 }}>
+        <div className="ap-panel-title">Condition Summary <span className="ap-panel-sub">Submitted exactly from the trade-in form</span></div>
+        <div className="ap-table-wrap">
+          <table className="ap-table">
+            <thead><tr><th>Customer</th><th>Model</th><th>Condition Details</th><th>Notes</th></tr></thead>
+            <tbody>
+              {mobileOnly.map((item) => (<tr key={`${item.id}-condition`} className="data-row"><td>{getTradeInCustomerName(item)}</td><td>{getTradeInModel(item)}</td><td>{getTradeInConditionSummary(item)}</td><td>{item.notes || "—"}</td></tr>))}
+              {mobileOnly.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>No condition details found</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {viewItem && <TradeInReadModal item={viewItem} onClose={() => setViewItem(null)} />}
+      {editItem && <TradeInUpdateModal item={editItem} onClose={() => setEditItem(null)} onSave={handleUpdateTrade} />}
     </>
   );
 }
@@ -3033,63 +2202,15 @@ function TradeInReadModal({ item, onClose }) {
   return (
     <div className="ap-modal-overlay" onClick={onClose}>
       <div className="ap-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-        <div className="ap-modal-header">
-          <div className="ap-modal-title">Mobile Trade-In Details</div>
-          <button className="ap-modal-close" onClick={onClose}>×</button>
-        </div>
-
+        <div className="ap-modal-header"><div className="ap-modal-title">Mobile Trade-In Details</div><button className="ap-modal-close" onClick={onClose}>×</button></div>
         <div className="ap-detail-tiles" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
-          <div className="ap-detail-tile">
-            <div className="ap-detail-tile-label">Customer</div>
-            <div className="ap-detail-tile-val">{getTradeInCustomerName(item)}</div>
-          </div>
-
-          <div className="ap-detail-tile">
-            <div className="ap-detail-tile-label">Phone</div>
-            <div className="ap-detail-tile-val">{getTradeInPhone(item)}</div>
-          </div>
-
-          <div className="ap-detail-tile">
-            <div className="ap-detail-tile-label">Brand</div>
-            <div className="ap-detail-tile-val">{item.brand || "—"}</div>
-          </div>
-
-          <div className="ap-detail-tile">
-            <div className="ap-detail-tile-label">Model</div>
-            <div className="ap-detail-tile-val">{getTradeInModel(item)}</div>
-          </div>
-
-          <div className="ap-detail-tile">
-            <div className="ap-detail-tile-label">IMEI</div>
-            <div className="ap-detail-tile-val">{getTradeInImei(item)}</div>
-          </div>
-
-          <div className="ap-detail-tile">
-            <div className="ap-detail-tile-label">Storage</div>
-            <div className="ap-detail-tile-val">{getTradeInStorage(item)}</div>
-          </div>
-
-          <div className="ap-detail-tile">
-            <div className="ap-detail-tile-label">Estimate</div>
-            <div className="ap-detail-tile-val">{fmt(getTradeInValue(item))}</div>
-          </div>
-
-          <div className="ap-detail-tile">
-            <div className="ap-detail-tile-label">Status</div>
-            <div className="ap-detail-tile-val">{item.status || "Pending"}</div>
-          </div>
+          {[["Customer", getTradeInCustomerName(item)], ["Phone", getTradeInPhone(item)], ["Brand", item.brand || "—"], ["Model", getTradeInModel(item)], ["IMEI", getTradeInImei(item)], ["Storage", getTradeInStorage(item)], ["Estimate", fmt(getTradeInValue(item))], ["Status", item.status || "Pending"]].map(([k, v]) => (
+            <div key={k} className="ap-detail-tile"><div className="ap-detail-tile-label">{k}</div><div className="ap-detail-tile-val">{v}</div></div>
+          ))}
         </div>
-
         <div className="ap-form-preview">
-          <div className="ap-form-preview-row">
-            <span className="ap-form-preview-key">Condition</span>
-            <span className="ap-form-preview-val">{getTradeInConditionSummary(item)}</span>
-          </div>
-
-          <div className="ap-form-preview-row">
-            <span className="ap-form-preview-key">Notes</span>
-            <span className="ap-form-preview-val">{item.notes || "—"}</span>
-          </div>
+          <div className="ap-form-preview-row"><span className="ap-form-preview-key">Condition</span><span className="ap-form-preview-val">{getTradeInConditionSummary(item)}</span></div>
+          <div className="ap-form-preview-row"><span className="ap-form-preview-key">Notes</span><span className="ap-form-preview-val">{item.notes || "—"}</span></div>
         </div>
       </div>
     </div>
@@ -3097,120 +2218,41 @@ function TradeInReadModal({ item, onClose }) {
 }
 
 function TradeInUpdateModal({ item, onClose, onSave }) {
-  const [form, setForm] = useState({
-    customerName: getTradeInCustomerName(item),
-    phone: getTradeInPhone(item),
-    brand: item.brand || "",
-    model: getTradeInModel(item),
-    imei: getTradeInImei(item),
-    storage: getTradeInStorage(item),
-    estimatedValue: getTradeInValue(item),
-    status: item.status || "Pending",
-    notes: item.notes || "",
-  });
-
-  const updateField = (key) => (e) => {
-    setForm((prev) => ({ ...prev, [key]: e.target.value }));
-  };
-
+  const [form, setForm] = useState({ customerName: getTradeInCustomerName(item), phone: getTradeInPhone(item), brand: item.brand || "", model: getTradeInModel(item), imei: getTradeInImei(item), storage: getTradeInStorage(item), estimatedValue: getTradeInValue(item), status: item.status || "Pending", notes: item.notes || "" });
+  const updateField = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
   return (
     <div className="ap-modal-overlay" onClick={onClose}>
       <div className="ap-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-        <div className="ap-modal-header">
-          <div className="ap-modal-title">Update Mobile Trade-In</div>
-          <button className="ap-modal-close" onClick={onClose}>×</button>
-        </div>
-
-        <div className="ap-form-group">
-          <label className="ap-form-label">Customer Name</label>
-          <input className="ap-form-input" value={form.customerName} onChange={updateField("customerName")} />
-        </div>
-
-        <div className="ap-form-group">
-          <label className="ap-form-label">Phone</label>
-          <input className="ap-form-input" value={form.phone} onChange={updateField("phone")} />
-        </div>
-
-        <div className="ap-form-group">
-          <label className="ap-form-label">Brand</label>
-          <input className="ap-form-input" value={form.brand} onChange={updateField("brand")} />
-        </div>
-
-        <div className="ap-form-group">
-          <label className="ap-form-label">Model</label>
-          <input className="ap-form-input" value={form.model} onChange={updateField("model")} />
-        </div>
-
-        <div className="ap-form-group">
-          <label className="ap-form-label">IMEI</label>
-          <input className="ap-form-input" value={form.imei} onChange={updateField("imei")} />
-        </div>
-
-        <div className="ap-form-group">
-          <label className="ap-form-label">Storage</label>
-          <input className="ap-form-input" value={form.storage} onChange={updateField("storage")} />
-        </div>
-
-        <div className="ap-form-group">
-          <label className="ap-form-label">Estimated Value</label>
-          <input
-            className="ap-form-input"
-            type="number"
-            value={form.estimatedValue}
-            onChange={updateField("estimatedValue")}
-          />
-        </div>
-
+        <div className="ap-modal-header"><div className="ap-modal-title">Update Mobile Trade-In</div><button className="ap-modal-close" onClick={onClose}>×</button></div>
+        {[["customerName","Customer Name"],["phone","Phone"],["brand","Brand"],["model","Model"],["imei","IMEI"],["storage","Storage"]].map(([k,l])=>(
+          <div key={k} className="ap-form-group"><label className="ap-form-label">{l}</label><input className="ap-form-input" value={form[k]} onChange={updateField(k)} /></div>
+        ))}
+        <div className="ap-form-group"><label className="ap-form-label">Estimated Value</label><input className="ap-form-input" type="number" value={form.estimatedValue} onChange={updateField("estimatedValue")} /></div>
         <div className="ap-form-group">
           <label className="ap-form-label">Status</label>
           <select className="ap-form-input" value={form.status} onChange={updateField("status")}>
-            <option value="Pending">Pending</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
-            <option value="Completed">Completed</option>
+            <option value="Pending">Pending</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option><option value="Completed">Completed</option>
           </select>
         </div>
-
-        <div className="ap-form-group">
-          <label className="ap-form-label">Notes</label>
-          <textarea
-            className="ap-form-input"
-            rows="3"
-            value={form.notes}
-            onChange={updateField("notes")}
-          />
-        </div>
-
-        <button className="ap-submit-btn" onClick={() => onSave(item.id, form)}>
-          Save Changes
-        </button>
+        <div className="ap-form-group"><label className="ap-form-label">Notes</label><textarea className="ap-form-input" rows="3" value={form.notes} onChange={updateField("notes")} /></div>
+        <button className="ap-submit-btn" onClick={() => onSave(item.id, form)}>Save Changes</button>
       </div>
     </div>
   );
 }
+
 function formatRequestDate(value) {
   const parsed = value?.toDate ? value.toDate() : value ? new Date(value) : null;
   if (!parsed || Number.isNaN(parsed.getTime())) return "Not available";
-  return parsed.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return parsed.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function EmployeeAccessPanel({ requests, search, onUpdateStatus, savingId }) {
   const term = (search || "").trim().toLowerCase();
-  const filtered = requests.filter((item) =>
-    !term || [item.fullName, item.firstName, item.lastName, item.email, item.phone, item.accessStatus]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(term))
-  );
-  const pendingCount = requests.filter((item) => item.accessStatus === "pending").length;
-  const approvedCount = requests.filter((item) => item.accessStatus === "approved").length;
-  const rejectedCount = requests.filter((item) => item.accessStatus === "rejected").length;
-
+  const filtered = requests.filter((item) => !term || [item.fullName, item.firstName, item.lastName, item.email, item.phone, item.accessStatus].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)));
+  const pendingCount = requests.filter((i) => i.accessStatus === "pending").length;
+  const approvedCount = requests.filter((i) => i.accessStatus === "approved").length;
+  const rejectedCount = requests.filter((i) => i.accessStatus === "rejected").length;
   return (
     <>
       <div className="ap-grid-4">
@@ -3219,7 +2261,6 @@ function EmployeeAccessPanel({ requests, search, onUpdateStatus, savingId }) {
         <div className="ap-stat-card red"><div className="ap-stat-icon red">R</div><div className="ap-stat-label">Rejected Requests</div><div className="ap-stat-value" style={{ color: "var(--red)" }}>{rejectedCount}</div><div className="ap-stat-sub">Blocked from staff portal</div></div>
         <div className="ap-stat-card blue"><div className="ap-stat-icon blue">T</div><div className="ap-stat-label">Total Requests</div><div className="ap-stat-value">{requests.length}</div><div className="ap-stat-sub">Employee signup records in users collection</div></div>
       </div>
-
       <div className="ap-panel" style={{ marginBottom: 16 }}>
         <div className="ap-panel-title">Employee Access Requests <span className="ap-panel-sub">Approve staff only after verifying their real identity</span></div>
         {filtered.length === 0 ? (
@@ -3235,29 +2276,96 @@ function EmployeeAccessPanel({ requests, search, onUpdateStatus, savingId }) {
                   </div>
                   <span className={`ap-request-badge ${item.accessStatus || "pending"}`}>{item.accessStatus || "pending"}</span>
                 </div>
-
                 <div className="ap-request-meta">
                   <div className="ap-request-meta-card"><span>Requested</span><strong>{formatRequestDate(item.requestedAt || item.createdAt)}</strong></div>
                   <div className="ap-request-meta-card"><span>Role</span><strong>{item.role || "employee"}</strong></div>
                   <div className="ap-request-meta-card"><span>Approved By</span><strong>{item.approvedByName || item.approvedBy || "-"}</strong></div>
                   <div className="ap-request-meta-card"><span>Approved At</span><strong>{formatRequestDate(item.approvedAt)}</strong></div>
                 </div>
-
                 <div className="ap-request-actions">
                   <button className="ap-request-btn approve" onClick={() => onUpdateStatus(item.uid, "approved")} disabled={savingId === item.uid}>Approve Access</button>
                   <button className="ap-request-btn reject" onClick={() => onUpdateStatus(item.uid, "rejected")} disabled={savingId === item.uid}>Reject Request</button>
                   <button className="ap-request-btn pending" onClick={() => onUpdateStatus(item.uid, "pending")} disabled={savingId === item.uid}>Mark Pending</button>
                 </div>
                 {item.employeeSecurityCode && (
-                  <div className="ap-request-code">
-                    <span>Employee Security Code</span>
-                    <strong>{item.employeeSecurityCode}</strong>
-                  </div>
+                  <div className="ap-request-code"><span>Employee Security Code</span><strong>{item.employeeSecurityCode}</strong></div>
                 )}
               </div>
             ))}
           </div>
         )}
+      </div>
+    </>
+  );
+}
+
+function PasswordResetsPanel({ resets, search, onAdminSend, onResolve }) {
+  const [sendingId, setSendingId] = useState('');
+  const [resolvingId, setResolvingId] = useState('');
+  const term = (search || '').trim().toLowerCase();
+  const filtered = resets.filter((r) => !term || [r.email, r.status, r.note, r.initiatedBy].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)));
+  const pendingCount = resets.filter((r) => r.status === 'requested').length;
+  const adminSentCount = resets.filter((r) => r.status === 'admin_sent').length;
+  const resolvedCount = resets.filter((r) => r.status === 'resolved').length;
+
+  const badgeStyle = (status) => {
+    if (status === 'requested') return { background: 'rgba(245,158,11,0.15)', color: 'var(--amber)', border: '1px solid rgba(245,158,11,0.3)' };
+    if (status === 'admin_sent') return { background: 'rgba(59,130,246,0.15)', color: 'var(--accent)', border: '1px solid rgba(59,130,246,0.3)' };
+    if (status === 'resolved') return { background: 'rgba(34,197,94,0.12)', color: 'var(--green)', border: '1px solid rgba(34,197,94,0.3)' };
+    return { background: 'rgba(255,255,255,0.05)', color: 'var(--muted)' };
+  };
+  const badgeLabel = (status) => ({ requested: 'Requested', admin_sent: 'Email Sent', resolved: 'Resolved' }[status] || status || 'Unknown');
+  const fmtDate = (value) => { if (!value) return '—'; const d = value?.toDate ? value.toDate() : new Date(value); if (Number.isNaN(d.getTime())) return '—'; return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+
+  const handleSend = async (r) => { setSendingId(r.id); try { await onAdminSend(r.email, r.id); } finally { setSendingId(''); } };
+  const handleResolve = async (r) => { setResolvingId(r.id); try { await onResolve(r.id); } finally { setResolvingId(''); } };
+
+  return (
+    <>
+      <div className="ap-grid-4">
+        <div className="ap-stat-card amber"><div className="ap-stat-icon amber">⏳</div><div className="ap-stat-label">Pending</div><div className="ap-stat-value" style={{ color: 'var(--amber)' }}>{pendingCount}</div><div className="ap-stat-sub">Awaiting admin action</div></div>
+        <div className="ap-stat-card blue"><div className="ap-stat-icon blue">✉</div><div className="ap-stat-label">Admin Sent</div><div className="ap-stat-value">{adminSentCount}</div><div className="ap-stat-sub">Admin triggered reset email</div></div>
+        <div className="ap-stat-card green"><div className="ap-stat-icon green">✓</div><div className="ap-stat-label">Resolved</div><div className="ap-stat-value" style={{ color: 'var(--green)' }}>{resolvedCount}</div><div className="ap-stat-sub">Marked as done</div></div>
+        <div className="ap-stat-card purple"><div className="ap-stat-icon purple">#</div><div className="ap-stat-label">Total</div><div className="ap-stat-value" style={{ color: 'var(--purple)' }}>{resets.length}</div><div className="ap-stat-sub">All-time reset requests</div></div>
+      </div>
+      <div className="ap-panel" style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 20px' }}>
+        <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(59,130,246,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>How password resets work</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+            When a customer or employee clicks <strong style={{ color: 'var(--text)' }}>"Forgot Password?"</strong> on the login page, Firebase emails them a secure reset link and the request is logged here automatically. You can also trigger a fresh reset email using <strong style={{ color: 'var(--text)' }}>"Send Reset Email"</strong> below. Passwords are never visible to admins — Firebase handles the change securely on the user's side.
+          </div>
+        </div>
+      </div>
+      <div className="ap-panel">
+        <div className="ap-panel-title">Password Reset Log <span className="ap-panel-sub">{filtered.length} {filtered.length === 1 ? 'request' : 'requests'} · newest first</span></div>
+        <div className="ap-table-wrap">
+          <table className="ap-table">
+            <thead><tr><th>Email Address</th><th>Status</th><th>Initiated By</th><th>Requested At</th><th>Admin Sent At</th><th>Note</th><th>Actions</th></tr></thead>
+            <tbody>
+              {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 36, color: 'var(--muted)' }}>{resets.length === 0 ? 'No password reset requests yet. They will appear here automatically when users click "Forgot Password?".' : 'No requests match your search.'}</td></tr>}
+              {filtered.map((r) => (
+                <tr key={r.id} className="data-row">
+                  <td style={{ fontFamily: 'var(--syne)', fontWeight: 600 }}>{r.email || '—'}</td>
+                  <td><span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, display: 'inline-block', ...badgeStyle(r.status) }}>{badgeLabel(r.status)}</span></td>
+                  <td style={{ color: 'var(--muted)', fontSize: 12 }}>{r.initiatedBy === 'user' ? 'Customer / Employee' : r.initiatedBy === 'admin' ? 'Admin' : r.initiatedBy || '—'}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-dim)' }}>{fmtDate(r.requestedAt)}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-dim)' }}>{fmtDate(r.adminSentAt)}</td>
+                  <td style={{ fontSize: 12, color: 'var(--muted)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.note || '—'}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {r.status !== 'resolved' && <button className="ap-action-btn" disabled={sendingId === r.id} onClick={() => handleSend(r)} title="Send a password reset email to this address">{sendingId === r.id ? 'Sending…' : '✉ Send Reset Email'}</button>}
+                      {r.status !== 'resolved' && <button className="ap-action-btn" disabled={resolvingId === r.id} onClick={() => handleResolve(r)} title="Mark this request as resolved" style={{ color: 'var(--green)', borderColor: 'rgba(34,197,94,0.3)' }}>{resolvingId === r.id ? 'Saving…' : '✓ Resolved'}</button>}
+                      {r.status === 'resolved' && <span style={{ fontSize: 12, color: 'var(--green)', padding: '5px 8px' }}>✓ Done</span>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
@@ -3277,16 +2385,12 @@ export default function AdminPanel() {
   const [requestSavingId, setRequestSavingId] = useState("");
   const [adminPortalCode, setAdminPortalCode] = useState(DEFAULT_ADMIN_PORTAL_CODE);
   const [portalCodeSaving, setPortalCodeSaving] = useState(false);
+  const [passwordResets, setPasswordResets] = useState([]);
   const injected = useRef(false);
 
   const liveRecords = records.map(r => ({ ...r, status: getStatus(r.efficiency, thresholds) }));
   const adminDisplayName = auth.currentUser?.displayName || auth.currentUser?.email || "Admin";
-  const adminInitials = adminDisplayName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("") || "A";
+  const adminInitials = adminDisplayName.split(" ").filter(Boolean).slice(0, 2).map((p) => p.charAt(0).toUpperCase()).join("") || "A";
 
   useEffect(() => {
     if (injected.current) return; injected.current = true;
@@ -3294,143 +2398,87 @@ export default function AdminPanel() {
     return () => { try { document.head.removeChild(s); } catch {} };
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('iconx_admin_theme', theme);
-  }, [theme]);
+  useEffect(() => { localStorage.setItem('iconx_admin_theme', theme); }, [theme]);
 
   useEffect(() => {
     setLoading(true);
-    fbGetAll()
-      .then(data => setRecords(data.length ? data : MOCK))
-      .catch(err => { console.error('Firebase load error:', err); setRecords(MOCK); })
-      .finally(() => setLoading(false));
+    fbGetAll().then(data => setRecords(data.length ? data : MOCK)).catch(err => { console.error('Firebase load error:', err); setRecords(MOCK); }).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, "employeeAttendance"),
-      (snapshot) => {
-        const rows = snapshot.docs
-          .map((item) => ({ id: item.id, ...item.data(), salesCount: Number(item.data().salesCount) || 0 }))
-          .sort((a, b) => `${b.date || ""}${b.checkIn || ""}`.localeCompare(`${a.date || ""}${a.checkIn || ""}`));
-
-        setEmployeeMetrics(rows);
-      },
-      (error) => {
-        console.error("Employee attendance metrics load error:", error);
-        setEmployeeMetrics([]);
-      }
-    );
-
+    const unsub = onSnapshot(collection(db, "employeeAttendance"), (snapshot) => { setEmployeeMetrics(snapshot.docs.map((item) => ({ id: item.id, ...item.data(), salesCount: Number(item.data().salesCount) || 0 })).sort((a, b) => `${b.date || ""}${b.checkIn || ""}`.localeCompare(`${a.date || ""}${a.checkIn || ""}`))); }, (error) => { console.error("Employee attendance metrics load error:", error); setEmployeeMetrics([]); });
     return unsub;
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, "users"),
-      (snapshot) => {
-        const rows = snapshot.docs
-          .map((item) => ({ uid: item.id, ...item.data() }))
-          .filter((item) => String(item.role || "").toLowerCase() === "employee")
-          .sort((a, b) => {
-            const aTime = a.requestedAt?.seconds || a.createdAt?.seconds || 0;
-            const bTime = b.requestedAt?.seconds || b.createdAt?.seconds || 0;
-            return bTime - aTime;
-          });
-
-        setEmployeeRequests(rows);
-      },
-      (error) => {
-        console.error("Employee request load error:", error);
-        setEmployeeRequests([]);
-      }
-    );
-
+    const unsub = onSnapshot(collection(db, "users"), (snapshot) => { setEmployeeRequests(snapshot.docs.map((item) => ({ uid: item.id, ...item.data() })).filter((item) => String(item.role || "").toLowerCase() === "employee").sort((a, b) => (b.requestedAt?.seconds || b.createdAt?.seconds || 0) - (a.requestedAt?.seconds || a.createdAt?.seconds || 0))); }, (error) => { console.error("Employee request load error:", error); setEmployeeRequests([]); });
     return unsub;
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(
-      doc(db, PORTAL_SETTINGS_COLLECTION, PORTAL_SETTINGS_DOC),
-      (snapshot) => {
-        const data = snapshot.exists() ? snapshot.data() : {};
-        setAdminPortalCode(String(data.adminCode || DEFAULT_ADMIN_PORTAL_CODE));
-      },
-      (error) => {
-        console.error("Portal code load error:", error);
-        setAdminPortalCode(DEFAULT_ADMIN_PORTAL_CODE);
-      }
-    );
+    const unsub = onSnapshot(doc(db, PORTAL_SETTINGS_COLLECTION, PORTAL_SETTINGS_DOC), (snapshot) => { const data = snapshot.exists() ? snapshot.data() : {}; setAdminPortalCode(String(data.adminCode || DEFAULT_ADMIN_PORTAL_CODE)); }, (error) => { console.error("Portal code load error:", error); setAdminPortalCode(DEFAULT_ADMIN_PORTAL_CODE); });
+    return unsub;
+  }, []);
 
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'passwordResets'), (snapshot) => {
+      const rows = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      rows.sort((a, b) => (b.requestedAt?.toMillis?.() || 0) - (a.requestedAt?.toMillis?.() || 0));
+      setPasswordResets(rows);
+    }, (err) => { console.error('passwordResets load error:', err); setPasswordResets([]); });
     return unsub;
   }, []);
 
   const openGroup = useCallback((g) => setModal({ type: 'group', group: g }), []);
 
-  /* ── Logout: signs out and redirects to /login ── */
-  const handleLogout = async () => {
+  const adminSendPasswordReset = async (email, resetId) => {
     try {
-      await signOut(auth);
-      navigate('/login');
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+      await sendPasswordResetEmail(auth, email);
+      await updateDoc(doc(db, 'passwordResets', resetId), { status: 'admin_sent', adminSentAt: serverTimestamp(), adminSentBy: auth.currentUser?.email || 'Admin' });
+    } catch (err) { console.error('Admin reset send failed:', err); alert('Failed to send reset email. Check the address is valid in Firebase Auth.'); }
+  };
+
+  const markResetResolved = async (resetId) => {
+    try { await updateDoc(doc(db, 'passwordResets', resetId), { status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: auth.currentUser?.email || 'Admin' }); }
+    catch (err) { console.error('markResetResolved failed:', err); }
+  };
+
+  const handleLogout = async () => {
+    try { await signOut(auth); navigate('/login'); }
+    catch (err) { console.error('Logout error:', err); }
   };
 
   const updateEmployeeAccess = async (uid, accessStatus) => {
     setRequestSavingId(uid);
     try {
       const target = employeeRequests.find((item) => item.uid === uid);
-      const nextEmployeeSecurityCode = accessStatus === "approved"
-        ? String(target?.employeeSecurityCode || generateEmployeePortalCode(target?.fullName || target?.email || uid))
-        : "";
-      await updateDoc(doc(db, "users", uid), {
-        accessStatus,
-        status: accessStatus,
-        approvedAt: accessStatus === "approved" ? serverTimestamp() : null,
-        approvedBy: auth.currentUser?.uid || "",
-        approvedByName: auth.currentUser?.displayName || auth.currentUser?.email || "Admin",
-        employeeSecurityCode: nextEmployeeSecurityCode,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (error) {
-      console.error("Failed to update employee access:", error);
-    } finally {
-      setRequestSavingId("");
-    }
+      const nextEmployeeSecurityCode = accessStatus === "approved" ? String(target?.employeeSecurityCode || generateEmployeePortalCode(target?.fullName || target?.email || uid)) : "";
+      await updateDoc(doc(db, "users", uid), { accessStatus, status: accessStatus, approvedAt: accessStatus === "approved" ? serverTimestamp() : null, approvedBy: auth.currentUser?.uid || "", approvedByName: auth.currentUser?.displayName || auth.currentUser?.email || "Admin", employeeSecurityCode: nextEmployeeSecurityCode, updatedAt: serverTimestamp() });
+    } catch (error) { console.error("Failed to update employee access:", error); }
+    finally { setRequestSavingId(""); }
   };
 
   const saveAdminPortalCode = async (nextCode) => {
     setPortalCodeSaving(true);
-    try {
-      await setDoc(
-        doc(db, PORTAL_SETTINGS_COLLECTION, PORTAL_SETTINGS_DOC),
-        {
-          adminCode: String(nextCode || DEFAULT_ADMIN_PORTAL_CODE),
-          updatedAt: serverTimestamp(),
-          updatedBy: auth.currentUser?.uid || "",
-          updatedByName: auth.currentUser?.displayName || auth.currentUser?.email || "Admin",
-        },
-        { merge: true }
-      );
-    } catch (error) {
-      console.error("Failed to save admin portal code:", error);
-    } finally {
-      setPortalCodeSaving(false);
-    }
+    try { await setDoc(doc(db, PORTAL_SETTINGS_COLLECTION, PORTAL_SETTINGS_DOC), { adminCode: String(nextCode || DEFAULT_ADMIN_PORTAL_CODE), updatedAt: serverTimestamp(), updatedBy: auth.currentUser?.uid || "", updatedByName: auth.currentUser?.displayName || auth.currentUser?.email || "Admin" }, { merge: true }); }
+    catch (error) { console.error("Failed to save admin portal code:", error); }
+    finally { setPortalCodeSaving(false); }
   };
 
   const NAV = [
     { k: 'dashboard', l: 'Dashboard' }, { k: 'product', l: 'Product Details' },
-    { k: 'customer', l: 'Customer Details' }, { k: 'reviews', l: 'Customer Reviews' }, { k: 'orders', l: 'Cart & Orders' }, { k: 'tradeIn', l: 'Mobile Trade-In' },
-    { k: 'attendance', l: 'Salary' }, { k: 'employeePerformance', l: 'Employee Insights' }, { k: 'employeeAccess', l: 'Employee Access' }, { k: 'settings', l: 'Settings' },
+    { k: 'customer', l: 'Customer Details' }, { k: 'passwordResets', l: 'Password Resets' },
+    { k: 'reviews', l: 'Customer Reviews' }, { k: 'orders', l: 'Cart & Orders' },
+    { k: 'tradeIn', l: 'Mobile Trade-In' }, { k: 'attendance', l: 'Salary' },
+    { k: 'employeePerformance', l: 'Employee Insights' }, { k: 'employeeAccess', l: 'Employee Access' },
+    { k: 'settings', l: 'Settings' },
   ];
 
   return (
     <div className="ap-root" data-theme={theme}>
       <div className="ap-sidebar">
         <div className="ap-brand">
-          <div className="ap-brand-logo">icon<span>X</span></div>
+          <img src={logo} alt="IconX Mobile Store" className="ap-brand-logo-img" />
           <div className="ap-brand-sub">Admin System</div>
         </div>
         <div className="ap-profile">
@@ -3455,13 +2503,8 @@ export default function AdminPanel() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Employee Attendance
           </button>
-          {/* ── LOGOUT BUTTON ── */}
           <button className="ap-logout-btn" onClick={handleLogout}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             Logout
           </button>
         </div>
@@ -3474,9 +2517,9 @@ export default function AdminPanel() {
             <button className="ap-theme-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
               {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </button>
-            <input className="ap-search" placeholder={tab === 'employeePerformance' ? 'Search attendance or sales...' : tab === 'employeeAccess' ? 'Search employee requests...' : 'Search staff...'} value={search} onChange={e => setSearch(e.target.value)} />
+            <input className="ap-search" placeholder={tab === 'employeePerformance' ? 'Search attendance or sales...' : tab === 'employeeAccess' ? 'Search employee requests...' : 'Search...'} value={search} onChange={e => setSearch(e.target.value)} />
             <div style={{ fontSize: 12, color: 'var(--muted)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 12px' }}>
-              {loading ? 'Loading...' : (tab === 'employeePerformance' ? employeeMetrics.length : tab === 'employeeAccess' ? employeeRequests.length : records.length) + ' records'}
+              {loading ? 'Loading...' : (tab === 'employeePerformance' ? employeeMetrics.length : tab === 'employeeAccess' ? employeeRequests.length : tab === 'passwordResets' ? passwordResets.length : records.length) + ' records'}
             </div>
           </div>
         </div>
@@ -3491,53 +2534,23 @@ export default function AdminPanel() {
               {tab === 'dashboard' && <Dashboard records={liveRecords} onGroup={openGroup} />}
               {tab === 'attendance' && (
                 <AttendancePanel
-                  records={liveRecords}
-                  setRecords={setRecords}
-                  employees={employeeRequests}
-                  onGroup={openGroup}
-                  fbAdd={fbAdd}
-                  fbUpdate={fbUpdate}
-                  fbDelete={fbDelete}
-                  statusColor={statusColor}
-                  statusLabel={statusLabel}
-                  statusIcon={statusIcon}
-                  fmt={fmt}
-                  calcEff={calcEff}
-                  getStatus={getStatus}
-                  Gauge={Gauge}
-                  Tip={Tip}
-                  onExportPdf={() => exportPDF(liveRecords)}
-                  onExportCsv={() => exportExcel(liveRecords)}
+                  records={liveRecords} setRecords={setRecords} employees={employeeRequests}
+                  onGroup={openGroup} fbAdd={fbAdd} fbUpdate={fbUpdate} fbDelete={fbDelete}
+                  statusColor={statusColor} statusLabel={statusLabel} statusIcon={statusIcon}
+                  fmt={fmt} calcEff={calcEff} getStatus={getStatus} Gauge={Gauge} Tip={Tip}
+                  onExportPdf={() => exportPDF(liveRecords)} onExportCsv={() => exportExcel(liveRecords)}
                 />
               )}
               {tab === 'employeePerformance' && <EmployeeAnalyticsPanel records={employeeMetrics} search={search} />}
               {tab === 'employeeAccess' && <EmployeeAccessPanel requests={employeeRequests} search={search} onUpdateStatus={updateEmployeeAccess} savingId={requestSavingId} />}
               {tab === 'settings' && <Settings records={liveRecords} thresholds={thresholds} setThresholds={setThresholds} adminPortalCode={adminPortalCode} setAdminPortalCode={setAdminPortalCode} onSaveAdminPortalCode={saveAdminPortalCode} portalCodeSaving={portalCodeSaving} />}
               {tab === 'product' && <ProductAdmin />}
-              {tab === 'customer' && (
-                <CrudPanel
-                  title="Customer Details"
-                  collectionName="customers"
-                  fields={CUSTOMER_FIELDS}
-                  primaryKey="Customer"
-                  description="Manage customer profiles stored in Firebase."
-                  search={search}
-                />
-              )}
-
-              {tab === 'reviews' && (
-                <CrudPanel
-                  title="Customer Reviews"
-                  collectionName="customerReviews"
-                  fields={REVIEW_FIELDS}
-                  primaryKey="Review"
-                  description="Messages submitted from the Contact Us page."
-                  search={search}
-                />
-              )}
+              {tab === 'customer' && <CrudPanel title="Customer Details" collectionName="customers" fields={CUSTOMER_FIELDS} primaryKey="Customer" description="Manage customer profiles stored in Firebase." search={search} />}
+              {tab === 'passwordResets' && <PasswordResetsPanel resets={passwordResets} search={search} onAdminSend={adminSendPasswordReset} onResolve={markResetResolved} />}
+              {tab === 'reviews' && <CrudPanel title="Customer Reviews" collectionName="customerReviews" fields={REVIEW_FIELDS} primaryKey="Review" description="Messages submitted from the Contact Us page." search={search} />}
               {tab === 'orders' && <CommercePanel search={search} />}
               {tab === 'tradeIn' && <TradeInPanel search={search} />}
-              {!['dashboard','attendance','employeePerformance','employeeAccess','settings','product','customer','reviews','orders','tradeIn'].includes(tab) && (
+              {!['dashboard','attendance','employeePerformance','employeeAccess','settings','product','customer','passwordResets','reviews','orders','tradeIn'].includes(tab) && (
                 <div className="ap-placeholder">
                   <div className="ap-placeholder-icon">🚧</div>
                   <div className="ap-placeholder-text">{NAV.find(n => n.k === tab)?.l}</div>
@@ -3549,10 +2562,7 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      {modal?.type === 'group' && (
-        <GroupModal type={modal.group} records={liveRecords} onClose={() => setModal(null)} />
-      )}
+      {modal?.type === 'group' && <GroupModal type={modal.group} records={liveRecords} onClose={() => setModal(null)} />}
     </div>
   );
 }
-
